@@ -21,6 +21,7 @@
 #include "sway/ipc-server.h"
 #include "sway/output.h"
 #include "sway/input/seat.h"
+#include "sway/style.h"
 #include "sway/tree/arrange.h"
 #include "sway/tree/container.h"
 #include "sway/tree/view.h"
@@ -252,6 +253,7 @@ void view_autoconfigure(struct sway_view *view) {
 	}
 
 	double x, y, width, height;
+	struct style_box cbox;
 	switch (con->border) {
 	default:
 	case B_CSD:
@@ -286,6 +288,13 @@ void view_autoconfigure(struct sway_view *view) {
 			height = con->height - container_titlebar_height()
 				- con->border_thickness * con->border_bottom;
 		}
+		break;
+	case B_STYLE:
+		cbox = style_content_box(&con->style);
+		x = con->x + cbox.x;
+		y = con->y + y_offset + cbox.y;
+		width = con->width + cbox.width;
+		height = con->height + cbox.height;
 		break;
 	}
 

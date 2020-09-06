@@ -6,6 +6,7 @@
 #include <wlr/types/wlr_surface.h>
 #include "list.h"
 #include "sway/tree/node.h"
+#include "sway/style.h"
 
 struct sway_view;
 struct sway_seat;
@@ -23,6 +24,7 @@ enum sway_container_border {
 	B_PIXEL,
 	B_NORMAL,
 	B_CSD,
+	B_STYLE,
 };
 
 enum sway_fullscreen_mode {
@@ -151,6 +153,8 @@ struct sway_container {
 	struct {
 		struct wl_signal destroy;
 	} events;
+
+	struct sway_style style;
 };
 
 struct sway_container *container_create(struct sway_view *view);

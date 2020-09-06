@@ -15,6 +15,8 @@ struct cmd_results *cmd_default_border(int argc, char **argv) {
 		config->border = B_NORMAL;
 	} else if (strcmp(argv[0], "pixel") == 0) {
 		config->border = B_PIXEL;
+	} else if (strcmp(argv[0], "style") == 0) {
+		config->border = B_STYLE;
 	} else {
 		return cmd_results_new(CMD_INVALID,
 				"Expected 'default_border <none|normal|pixel>' or 'default_border <normal|pixel> <px>'");

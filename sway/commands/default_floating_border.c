@@ -16,6 +16,8 @@ struct cmd_results *cmd_default_floating_border(int argc, char **argv) {
 		config->floating_border = B_NORMAL;
 	} else if (strcmp(argv[0], "pixel") == 0) {
 		config->floating_border = B_PIXEL;
+	} else if (strcmp(argv[0], "style") == 0) {
+		config->floating_border = B_STYLE;
 	} else {
 		return cmd_results_new(CMD_INVALID,
 				"Expected 'default_floating_border <none|normal|pixel>' "

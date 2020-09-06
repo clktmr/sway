@@ -59,6 +59,8 @@ static const char *ipc_json_border_description(enum sway_container_border border
 		return "normal";
 	case B_CSD:
 		return "csd";
+	case B_STYLE:
+		return "style";
 	}
 	return "unknown";
 }

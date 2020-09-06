@@ -16,6 +16,7 @@
 #include "sway/ipc-server.h"
 #include "sway/output.h"
 #include "sway/server.h"
+#include "sway/style.h"
 #include "sway/tree/arrange.h"
 #include "sway/tree/view.h"
 #include "sway/tree/workspace.h"
@@ -40,6 +41,8 @@ struct sway_container *container_create(struct sway_view *view) {
 	}
 	c->marks = create_list();
 	c->outputs = create_list();
+
+	style_init(&c->style);
 
 	wl_signal_init(&c->events.destroy);
 	wl_signal_emit(&root->events.new_node, &c->node);
@@ -787,6 +790,16 @@ void container_set_geometry_from_content(struct sway_container *con) {
 	}
 	size_t border_width = 0;
 	size_t top = 0;
+
+	if (con->border == B_STYLE) {
+		struct style_box cbox = style_content_box(&con->style);
+		con->x = con->content_x - cbox.x;
+		con->y = con->content_y - cbox.y;
+		con->width = con->content_width - cbox.width;
+		con->height = con->content_height - cbox.height;
+		node_set_dirty(&con->node);
+		return;
+	}
 
 	if (con->border != B_CSD) {
 		border_width = con->border_thickness * (con->border != B_NONE);

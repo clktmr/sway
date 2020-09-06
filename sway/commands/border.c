@@ -42,6 +42,9 @@ static void border_toggle(struct sway_container *con) {
 	case B_PIXEL:
 		set_border(con, B_NORMAL);
 		break;
+	case B_STYLE:
+		set_border(con, B_STYLE);
+		break;
 	case B_NORMAL:
 		if (con->view && con->view->xdg_decoration) {
 			set_border(con, B_CSD);
@@ -74,6 +77,8 @@ struct cmd_results *cmd_border(int argc, char **argv) {
 		set_border(container, B_NORMAL);
 	} else if (strcmp(argv[0], "pixel") == 0) {
 		set_border(container, B_PIXEL);
+	} else if (strcmp(argv[0], "style") == 0) {
+		set_border(container, B_STYLE);
 	} else if (strcmp(argv[0], "csd") == 0) {
 		if (!view->xdg_decoration) {
 			return cmd_results_new(CMD_INVALID,
@@ -84,7 +89,7 @@ struct cmd_results *cmd_border(int argc, char **argv) {
 		border_toggle(container);
 	} else {
 		return cmd_results_new(CMD_INVALID,
-				"Expected 'border <none|normal|pixel|csd|toggle>' "
+				"Expected 'border <none|normal|pixel|style|csd|toggle>' "
 				"or 'border pixel <px>'");
 	}
 	if (argc == 2) {

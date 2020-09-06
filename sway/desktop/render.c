@@ -1,3 +1,4 @@
+#include "sway/style.h"
 #define _POSIX_C_SOURCE 200809L
 #include <assert.h>
 #include <GLES2/gl2.h>
@@ -224,6 +225,56 @@ damage_finish:
 	pixman_region32_fini(&damage);
 }
 
+void render_corner(struct sway_output *output,
+		pixman_region32_t *output_damage, const struct wlr_box *_box,
+		float color[static 4], enum style_edge corner) {
+	struct wlr_output *wlr_output = output->wlr_output;
+	struct wlr_renderer *renderer =
+		wlr_backend_get_renderer(wlr_output->backend);
+
+	struct wlr_box box;
+	memcpy(&box, _box, sizeof(struct wlr_box));
+	box.width *= 2;
+	box.height *= 2;
+	switch (corner) {
+	case SE_RIGHT:
+		box.x -= _box->width;
+		break;
+	case SE_BOTTOM:
+		box.x -= _box->width;
+		box.y -= _box->height;
+		break;
+	case SE_LEFT:
+		box.y -= _box->height;
+		break;
+	default:
+		break;
+	}
+	box.x -= output->lx * wlr_output->scale;
+	box.y -= output->ly * wlr_output->scale;
+
+	pixman_region32_t damage;
+	pixman_region32_init(&damage);
+	pixman_region32_union_rect(&damage, &damage, _box->x, _box->y,
+		_box->width, _box->height);
+	pixman_region32_intersect(&damage, &damage, output_damage);
+	bool damaged = pixman_region32_not_empty(&damage);
+	if (!damaged) {
+		goto damage_finish;
+	}
+
+	int nrects;
+	pixman_box32_t *rects = pixman_region32_rectangles(&damage, &nrects);
+	for (int i = 0; i < nrects; ++i) {
+		scissor_output(wlr_output, &rects[i]);
+		wlr_render_ellipse(renderer, &box, color,
+			wlr_output->transform_matrix);
+	}
+
+damage_finish:
+	pixman_region32_fini(&damage);
+}
+
 void premultiply_alpha(float color[4], float opacity) {
 	color[3] *= opacity;
 	color[0] *= color[3];
@@ -307,6 +358,141 @@ static void render_saved_view(struct sway_view *view,
 	// https://github.com/swaywm/sway/pull/4465#discussion_r321082059
 }
 
+static void render_style(struct sway_output *output, pixman_region32_t *damage,
+		struct sway_container *con) {
+	struct sway_style *s = &con->style;
+	struct wlr_box box;
+	float output_scale = output->wlr_output->scale;
+	float color[4] = {1.0f, 0.0f, 0.0f, 1.0f};
+	struct sway_container_state *state = &con->current;
+
+	
+	const float *border_width = style_get_vector4(s, SV4_BORDER_WIDTH);
+	const float *border_radius = style_get_vector4(s, SV4_BORDER_RADIUS);
+	const float *padding = style_get_vector4(s, SV4_PADDING);
+
+	// edge borders
+	memcpy(&color, style_get_vector4(s, SV4_BORDER_COLOR), sizeof(float) * 4);
+	premultiply_alpha(color, 1.0f - style_get_scalar(s, SS_OPACITY));
+
+	box.x = state->x + border_radius[SE_TOP];
+	box.y = state->y;
+	box.width = state->width - border_radius[SE_TOP] - border_radius[SE_RIGHT];
+	box.height = border_width[SE_TOP];
+	scale_box(&box, output_scale);
+	render_rect(output, damage, &box, color);
+
+	box.x = state->x + state->width - border_width[SE_RIGHT];
+	box.y = state->y + border_radius[SE_RIGHT];
+	box.width = border_width[SE_RIGHT];
+	box.height = state->height - border_radius[SE_RIGHT] - border_radius[SE_BOTTOM];
+	scale_box(&box, output_scale);
+	render_rect(output, damage, &box, color);
+
+	box.x = state->x + border_radius[SE_LEFT];
+	box.y = state->y + state->height - border_width[SE_BOTTOM];
+	box.width = state->width - border_radius[SE_BOTTOM] - border_radius[SE_LEFT];
+	box.height = border_width[SE_BOTTOM];
+	scale_box(&box, output_scale);
+	render_rect(output, damage, &box, color);
+
+	box.x = state->x;
+	box.y = state->y + border_radius[SE_TOP];
+	box.width = border_width[SE_LEFT];
+	box.height = state->height - border_radius[SE_LEFT] - border_radius[SE_TOP];
+	scale_box(&box, output_scale);
+	render_rect(output, damage, &box, color);
+
+	// corners borders
+	box.x = state->x;
+	box.y = state->y;
+	box.width = box.height = border_radius[SE_TOP];
+	scale_box(&box, output_scale);
+	render_corner(output, damage, &box, color, SE_TOP);
+
+	box.x = state->x + state->width - border_radius[SE_RIGHT];
+	box.y = state->y;
+	box.width = box.height = border_radius[SE_RIGHT];
+	scale_box(&box, output_scale);
+	render_corner(output, damage, &box, color, SE_RIGHT);
+
+	box.x = state->x + state->width - border_radius[SE_BOTTOM];
+	box.y = state->y + state->height - border_radius[SE_BOTTOM];
+	box.width = box.height = border_radius[SE_BOTTOM];
+	scale_box(&box, output_scale);
+	render_corner(output, damage, &box, color, SE_BOTTOM);
+
+	box.x = state->x;
+	box.y = state->y + state->height - border_radius[SE_LEFT];
+	box.width = box.height = border_radius[SE_LEFT];
+	scale_box(&box, output_scale);
+	render_corner(output, damage, &box, color, SE_LEFT);
+
+	// edge backgrounds
+	// FIXME thickness shouldn't allowed to be smaller than any of the two
+	// adjacent border radiuses.
+	// FIXME wideness shouldn't be allowed to bigger than the padding box.
+	memcpy(&color, style_get_vector4(s, SV4_BACKGROUND_COLOR), sizeof(float) * 4);
+	premultiply_alpha(color, 1.0f - style_get_scalar(s, SS_OPACITY));
+
+	box.x = state->x + border_radius[SE_TOP];
+	box.y = state->y + border_width[SE_TOP];
+	box.width = state->width - border_radius[SE_TOP] - border_radius[SE_RIGHT];
+	box.height = padding[SE_TOP];
+	scale_box(&box, output_scale);
+	render_rect(output, damage, &box, color);
+
+	box.x = state->content_x + state->content_width;
+	box.y = state->y + border_radius[SE_RIGHT];
+	box.width = padding[SE_RIGHT];
+	box.height = state->height - border_radius[SE_RIGHT] - border_radius[SE_BOTTOM];
+	scale_box(&box, output_scale);
+	render_rect(output, damage, &box, color);
+
+	box.x = state->x + border_radius[SE_LEFT];
+	box.y = state->content_y + state->content_height;
+	box.width = state->width - border_radius[SE_BOTTOM] - border_radius[SE_LEFT];
+	box.height = padding[SE_BOTTOM];
+	scale_box(&box, output_scale);
+	render_rect(output, damage, &box, color);
+
+	box.x = state->x + border_width[SE_LEFT];
+	box.y = state->y + border_radius[SE_TOP];
+	box.width = padding[SE_LEFT];
+	box.height = state->height - border_radius[SE_LEFT] - border_radius[SE_TOP];
+	scale_box(&box, output_scale);
+	render_rect(output, damage, &box, color);
+
+	// corners backgrounds
+	box.x = state->x + border_width[SE_LEFT];
+	box.y = state->y + border_width[SE_TOP];
+	box.width = border_radius[SE_TOP] - border_width[SE_LEFT];
+	box.height = border_radius[SE_TOP] - border_width[SE_TOP];
+	scale_box(&box, output_scale);
+	render_corner(output, damage, &box, color, SE_TOP);
+
+	box.x = state->x + state->width - border_radius[SE_RIGHT];
+	box.y = state->y + border_width[SE_TOP];
+	box.width = border_radius[SE_RIGHT] - border_width[SE_RIGHT];
+	box.height = border_radius[SE_RIGHT] - border_width[SE_TOP];
+	scale_box(&box, output_scale);
+	render_corner(output, damage, &box, color, SE_RIGHT);
+
+	box.x = state->x + state->width - border_radius[SE_BOTTOM];
+	box.y = state->y + state->height - border_radius[SE_BOTTOM];
+	box.width = border_radius[SE_BOTTOM] - border_width[SE_RIGHT];
+	box.height = border_radius[SE_BOTTOM] - border_width[SE_BOTTOM];
+	scale_box(&box, output_scale);
+	render_corner(output, damage, &box, color, SE_BOTTOM);
+
+	box.x = state->x + border_width[SE_LEFT];
+	box.y = state->y + state->height - border_radius[SE_LEFT];
+	box.width = border_radius[SE_LEFT] - border_width[SE_LEFT];
+	box.height = border_radius[SE_LEFT] - border_width[SE_BOTTOM];
+	scale_box(&box, output_scale);
+	render_corner(output, damage, &box, color, SE_LEFT);
+}
+
 /**
  * Render a view's surface and left/bottom/right borders.
  */
@@ -319,7 +505,8 @@ static void render_view(struct sway_output *output, pixman_region32_t *damage,
 		render_view_toplevels(view, output, damage, view->container->alpha);
 	}
 
-	if (con->current.border == B_NONE || con->current.border == B_CSD) {
+	enum sway_container_border border = con->current.border;
+	if (border == B_NONE || border == B_CSD || border == B_STYLE) {
 		return;
 	}
 
@@ -704,6 +891,8 @@ static void render_containers_linear(struct sway_output *output,
 						title_texture, marks_texture);
 			} else if (state->border == B_PIXEL) {
 				render_top_border(output, damage, child, colors);
+			} else if (state->border == B_STYLE) {
+				render_style(output, damage, child);
 			}
 			render_view(output, damage, child, colors);
 		} else {
