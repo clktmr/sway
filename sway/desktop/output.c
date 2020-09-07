@@ -724,7 +724,19 @@ static void damage_child_views_iterator(struct sway_container *con,
 void output_damage_whole_container(struct sway_output *output,
 		struct sway_container *con) {
 	// Pad the box by 1px, because the width is a double and might be a fraction
-	struct wlr_box box = {
+	struct wlr_box box;
+	if (con->border == B_STYLE) {
+		struct style_box sbox = style_shadow_box(&con->style);
+		box = (struct wlr_box){
+			.x = con->current.x + sbox.x - output->lx - 1,
+			.y = con->current.y + sbox.y - output->ly - 1,
+			.width = con->current.width + sbox.width + 2,
+			.height = con->current.height + sbox.height + 2,
+		};
+		scale_box(&box, output->wlr_output->scale);
+		wlr_output_damage_add_box(output->damage, &box);
+	}
+	box = (struct wlr_box) {
 		.x = con->current.x - output->lx - 1,
 		.y = con->current.y - output->ly - 1,
 		.width = con->current.width + 2,

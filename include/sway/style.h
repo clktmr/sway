@@ -1,6 +1,8 @@
 #ifndef _SWAY_STYLE_H
 #define _SWAY_STYLE_H
 #include <stdbool.h>
+#include <wlr/types/wlr_box.h>
+#include <wlr/render/wlr_texture.h>
 
 enum style_edge {
 	SE_TOP,
@@ -89,6 +91,15 @@ struct style_box style_shadow_box(const struct sway_style *s);
 /**
  * Returns a box that contains both of the specified boxes.
  */
-struct style_box style_box_union(const struct style_box *a, const struct style_box *b);
+struct style_box style_box_union(const struct style_box *a,
+		const struct style_box *b);
+
+/**
+ * TODO document
+ */
+void style_render_shadow(struct sway_style *s, const struct wlr_box *box,
+		const float matrix[static 9]);
+
+void style_shader_init(struct wlr_renderer *renderer);
 
 #endif

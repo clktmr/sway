@@ -58,6 +58,8 @@ bool server_init(struct sway_server *server) {
 
 	wlr_renderer_init_wl_display(renderer, server->wl_display);
 
+	style_shader_init(renderer);
+
 	server->compositor = wlr_compositor_create(server->wl_display, renderer);
 	server->compositor_new_surface.notify = handle_compositor_new_surface;
 	wl_signal_add(&server->compositor->events.new_surface,

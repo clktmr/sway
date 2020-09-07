@@ -358,6 +358,31 @@ static void render_saved_view(struct sway_view *view,
 	// https://github.com/swaywm/sway/pull/4465#discussion_r321082059
 }
 
+static void render_style_shadow(struct wlr_output *wlr_output,
+		pixman_region32_t *output_damage, struct sway_style *style,
+		const struct wlr_box *box, const float matrix[static 9]) {
+	pixman_region32_t damage;
+	pixman_region32_init(&damage);
+	pixman_region32_union_rect(&damage, &damage, box->x, box->y,
+		box->width, box->height);
+	pixman_region32_intersect(&damage, &damage, output_damage);
+	bool damaged = pixman_region32_not_empty(&damage);
+	if (!damaged) {
+		goto damage_finish;
+	}
+
+	int nrects;
+	pixman_box32_t *rects = pixman_region32_rectangles(&damage, &nrects);
+	for (int i = 0; i < nrects; ++i) {
+		scissor_output(wlr_output, &rects[i]);
+		/* set_scale_filter(wlr_output, texture, output->scale_filter); */
+		style_render_shadow(style, box, matrix);
+	}
+
+damage_finish:
+	pixman_region32_fini(&damage);
+}
+
 static void render_style(struct sway_output *output, pixman_region32_t *damage,
 		struct sway_container *con) {
 	struct sway_style *s = &con->style;
@@ -366,6 +391,21 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 	float color[4] = {1.0f, 0.0f, 0.0f, 1.0f};
 	struct sway_container_state *state = &con->current;
 
+	// render box shadow
+	struct style_box sbox = style_shadow_box(s);
+	box.x = state->content_x + sbox.x;
+	box.y = state->content_y + sbox.y;
+	box.width = state->content_width + sbox.width;
+	box.height = state->content_height + sbox.height;
+	scale_box(&box, output->wlr_output->scale);
+
+	float matrix[9];
+	wlr_matrix_project_box(matrix, &box, WL_OUTPUT_TRANSFORM_NORMAL, 0,
+			output->wlr_output->transform_matrix);
+
+	render_style_shadow(output->wlr_output, damage, &con->style, &box, matrix);
+
+	return; // TODO
 	
 	const float *border_width = style_get_vector4(s, SV4_BORDER_WIDTH);
 	const float *border_radius = style_get_vector4(s, SV4_BORDER_RADIUS);
@@ -1113,6 +1153,8 @@ static void render_floating_container(struct sway_output *soutput,
 					title_texture, marks_texture);
 		} else if (con->current.border == B_PIXEL) {
 			render_top_border(soutput, damage, con, colors);
+		} else if (con->current.border == B_STYLE) {
+			render_style(soutput, damage, con);
 		}
 		render_view(soutput, damage, con, colors);
 	} else {
