@@ -45,3 +45,33 @@ struct style_box style_content_box(const struct sway_style *s) {
 	};
 	return box;
 }
+
+struct style_box style_shadow_box(const struct sway_style *s) {
+	const float blur = style_get_scalar(s, SS_BOX_SHADOW_BLUR);
+	const float inset = style_get_scalar(s, SS_BOX_SHADOW_INSET);
+	const float offset_h = style_get_scalar(s, SS_BOX_SHADOW_H_OFFSET);
+	const float offset_v = style_get_scalar(s, SS_BOX_SHADOW_V_OFFSET);
+	const float size = blur + inset;
+	struct style_box box = {
+		.x = offset_h - size,
+		.y = offset_v - size,
+		.width = 2.0f*size,
+		.height = 2.0f*size
+	};
+	return box;
+}
+
+struct style_box style_box_union(const struct style_box *a,
+		const struct style_box *b) {
+	float left = (a->x < b->x) ? a->x : b->x;
+	float top = (a->y < b->y) ? a->y : b->y;
+	float right = (a->x+a->width < b->x+b->width) ? a->x+a->width : b->x+b->width;
+	float bottom = (a->y+a->height < b->y+b->height) ? a->y+a->height : b->y+b->height;
+	struct style_box box = {
+		.x = left,
+		.y = top,
+		.width = right - left,
+		.height = bottom - top,
+	};
+	return box;
+}

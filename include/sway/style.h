@@ -80,4 +80,15 @@ void style_set_vector4(struct sway_style *s, enum style_vector4 prop, float val[
  */
 struct style_box style_content_box(const struct sway_style *s);
 
+/**
+ * Returns the difference between translation and size of the shadow box in
+ * relation to the border box, i.e. content_box - border_box.
+ */
+struct style_box style_shadow_box(const struct sway_style *s);
+
+/**
+ * Returns a box that contains both of the specified boxes.
+ */
+struct style_box style_box_union(const struct style_box *a, const struct style_box *b);
+
 #endif
