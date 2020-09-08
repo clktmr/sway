@@ -100,6 +100,12 @@ struct style_box style_box_union(const struct style_box *a,
 void style_render_shadow(struct sway_style *s, const struct wlr_box *box,
 		const float matrix[static 9]);
 
+/**
+ * TODO document
+ */
+void style_render_borders(struct sway_style *s, const struct wlr_box *box,
+		const float matrix[static 9]);
+
 void style_shader_init(struct wlr_renderer *renderer);
 
 #endif

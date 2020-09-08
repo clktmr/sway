@@ -106,27 +106,33 @@ struct style_box style_box_union(const struct style_box *a,
 
 const GLchar style_shader_vertex_src[] =
 "uniform mat3 proj;\n"
-"uniform vec4 color;\n"
+"uniform vec4 fg_color;\n"
+"uniform vec4 bg_color;\n"
 "attribute vec2 pos;\n"
 "attribute vec2 texcoord;\n"
-"varying vec4 v_color;\n"
+"varying vec4 v_fg_color;\n"
+"varying vec4 v_bg_color;\n"
 "varying vec2 v_texcoord;\n"
 "\n"
 "void main() {\n"
-"   gl_Position = vec4(proj * vec3(pos, 1.0), 1.0);\n"
-"   v_color = color;\n"
-"   v_texcoord = texcoord;\n"
+"	gl_Position = vec4(proj * vec3(pos, 1.0), 1.0);\n"
+"	v_fg_color = fg_color;\n"
+"	v_bg_color = bg_color;\n"
+"	v_texcoord = texcoord;\n"
 "}\n";
 
 const GLchar style_shader_fragment_src[] =
 "precision mediump float;\n"
 "uniform sampler2D tex;\n"
-"varying vec4 v_color;\n"
+"varying vec4 v_fg_color;\n"
+"varying vec4 v_bg_color;\n"
 "varying vec2 v_texcoord;\n"
 "\n"
 "void main() {\n"
-"   gl_FragColor = v_color*texture2D(tex, v_texcoord).a;\n"
+"	float c = texture2D(tex, v_texcoord).a;\n"
+"	gl_FragColor = v_fg_color*c + v_bg_color*(1.0-c);\n"
 "}\n";
+
 static GLuint compile_shader(GLuint type, const GLchar *src) {
 	GLuint shader = glCreateShader(type);
 	glShaderSource(shader, 1, &src, NULL);
@@ -202,11 +208,13 @@ void style_render_shadow(struct sway_style *s, const struct wlr_box *box,
 
 	glUseProgram(style_shader_prog);
 
-	GLint color_uniform = glGetUniformLocation(style_shader_prog, "color");
+	GLint fg_color_uniform = glGetUniformLocation(style_shader_prog, "fg_color");
+	GLint bg_color_uniform = glGetUniformLocation(style_shader_prog, "bg_color");
 	GLint proj_uniform = glGetUniformLocation(style_shader_prog, "proj");
 	GLint tex_uniform = glGetUniformLocation(style_shader_prog, "tex");
 	const float* shadow_color = style_get_vector4(s, SV4_BOX_SHADOW_COLOR);
-	glUniform4fv(color_uniform, 1, shadow_color);
+	glUniform4fv(fg_color_uniform, 1, shadow_color);
+	glUniform4fv(bg_color_uniform, 1, (float[]){0.0f, 0.0f, 0.0f, 0.0f});
 	glUniform1i(tex_uniform, 0);
 	glUniformMatrix3fv(proj_uniform, 1, GL_FALSE, transposition);
 
@@ -257,6 +265,93 @@ void style_render_shadow(struct sway_style *s, const struct wlr_box *box,
 		quad_verts(px0, px0, px1, px1)
 		quad_verts(px0, px0, px1, px0)
 		quad_verts(px0, px1, px1, px0)
+	};
+
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, verts);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, texcoord);
+
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+
+	glDrawArrays(GL_TRIANGLES, 0, sizeof(verts)/sizeof(*verts)/2);
+
+	glDisableVertexAttribArray(0);
+	glDisableVertexAttribArray(1);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void style_render_borders(struct sway_style *s, const struct wlr_box *box,
+		const float matrix[static 9]) {
+	// OpenGL ES 2 requires the glUniformMatrix3fv transpose parameter to be set
+	// to GL_FALSE
+	float transposition[9];
+	wlr_matrix_transpose(transposition, matrix);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, gauss_lut_tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+	glUseProgram(style_shader_prog);
+
+	GLint fg_color_uniform = glGetUniformLocation(style_shader_prog, "fg_color");
+	GLint bg_color_uniform = glGetUniformLocation(style_shader_prog, "bg_color");
+	GLint proj_uniform = glGetUniformLocation(style_shader_prog, "proj");
+	GLint tex_uniform = glGetUniformLocation(style_shader_prog, "tex");
+	const float* border_color = style_get_vector4(s, SV4_BORDER_COLOR);
+	const float* bg_color = style_get_vector4(s, SV4_BACKGROUND_COLOR);
+	glUniform4fv(fg_color_uniform, 1, border_color);
+	glUniform4fv(bg_color_uniform, 1, bg_color);
+	glUniform1i(tex_uniform, 0);
+	glUniformMatrix3fv(proj_uniform, 1, GL_FALSE, transposition);
+
+	// Generate the illustrated quadratic mesh to render the shadow.  Quad #4
+	// will render with the background color, while all other quads are
+	// rendered with the border color.
+	//
+	//   oe ┌───┬───┬───┐
+	//      │ 0 │ 1 │ 2 │
+	//   it ├───┼───┼───┤
+	//      │ 3 │ 4 │ 5 │
+	//   ib ├───┼───┼───┤
+	//      │ 6 │ 7 │ 8 │
+	//   ob └───┴───┴───┘
+	//      ob  il  ir  oe
+	//
+	// TODO Possible performance improvement by storing the mesh once in a
+	// global VBO and animate it in the vertex shader by passing it, ib, il and
+	// ir as uniforms.
+	const float *bw = style_get_vector4(s, SV4_BORDER_WIDTH);
+	float ob = 0.0f, oe = 1.0f;
+	float ib = bw[SE_BOTTOM] / (float)box->height;
+	float it = oe - bw[SE_TOP] / (float)box->height;
+	float il = bw[SE_LEFT] / (float)box->width;
+	float ir = oe - bw[SE_RIGHT] / (float)box->width;
+	GLfloat verts[] = {
+		quad_verts(oe, il, it, ob)
+		quad_verts(oe, ir, it, il)
+		quad_verts(oe, oe, it, ir)
+		quad_verts(it, il, ib, ob)
+		quad_verts(it, ir, ib, il)
+		quad_verts(it, oe, ib, ir)
+		quad_verts(ib, il, ob, ob)
+		quad_verts(ib, ir, ob, il)
+		quad_verts(ib, oe, ob, ir)
+	};
+
+	// Note that pixels should be sampled in the center for proper interpolation
+	float px0 = 1.0f/16.0f/2.0f;
+	float px1 = 31.0f * px0;
+	GLfloat texcoord[] = {
+		quad_verts(px0, px0, px0, px0)
+		quad_verts(px0, px0, px0, px0)
+		quad_verts(px0, px0, px0, px0)
+		quad_verts(px0, px0, px0, px0)
+		quad_verts(px1, px1, px1, px1)
+		quad_verts(px0, px0, px0, px0)
+		quad_verts(px0, px0, px0, px0)
+		quad_verts(px0, px0, px0, px0)
+		quad_verts(px0, px0, px0, px0)
 	};
 
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, verts);
