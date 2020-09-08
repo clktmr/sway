@@ -128,18 +128,18 @@ const GLchar style_shader_fragment_src[] =
 "   gl_FragColor = v_color*texture2D(tex, v_texcoord).a;\n"
 "}\n";
 static GLuint compile_shader(GLuint type, const GLchar *src) {
-    GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &src, NULL);
-    glCompileShader(shader);
+	GLuint shader = glCreateShader(type);
+	glShaderSource(shader, 1, &src, NULL);
+	glCompileShader(shader);
 
-    GLint ok;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
-    if (ok == GL_FALSE) {
-        glDeleteShader(shader);
-        shader = 0;
-    }
+	GLint ok;
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
+	if (ok == GL_FALSE) {
+		glDeleteShader(shader);
+		shader = 0;
+	}
 
-    return shader;
+	return shader;
 }
 
 // FIXME free resources in style_shader_deinit()
@@ -152,34 +152,34 @@ void style_shader_init(struct wlr_renderer *renderer) {
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	// build shader programs
-    GLuint vert = compile_shader(GL_VERTEX_SHADER, style_shader_vertex_src);
-    if (!vert) {
-        goto error;
-    }
+	GLuint vert = compile_shader(GL_VERTEX_SHADER, style_shader_vertex_src);
+	if (!vert) {
+		goto error;
+	}
 
-    GLuint frag = compile_shader(GL_FRAGMENT_SHADER, style_shader_fragment_src);
-    if (!frag) {
-        glDeleteShader(vert);
-        goto error;
-    }
+	GLuint frag = compile_shader(GL_FRAGMENT_SHADER, style_shader_fragment_src);
+	if (!frag) {
+		glDeleteShader(vert);
+		goto error;
+	}
 
-    style_shader_prog = glCreateProgram();
-    glAttachShader(style_shader_prog, vert);
-    glAttachShader(style_shader_prog, frag);
-    glLinkProgram(style_shader_prog);
+	style_shader_prog = glCreateProgram();
+	glAttachShader(style_shader_prog, vert);
+	glAttachShader(style_shader_prog, frag);
+	glLinkProgram(style_shader_prog);
 
-    glDetachShader(style_shader_prog, vert);
-    glDetachShader(style_shader_prog, frag);
-    glDeleteShader(vert);
-    glDeleteShader(frag);
+	glDetachShader(style_shader_prog, vert);
+	glDetachShader(style_shader_prog, frag);
+	glDeleteShader(vert);
+	glDeleteShader(frag);
 
-    GLint ok;
-    glGetProgramiv(style_shader_prog, GL_LINK_STATUS, &ok);
-    if (ok == GL_FALSE) {
-        glDeleteProgram(style_shader_prog);
-        goto error;
-    }
-    return;
+	GLint ok;
+	glGetProgramiv(style_shader_prog, GL_LINK_STATUS, &ok);
+	if (ok == GL_FALSE) {
+		glDeleteProgram(style_shader_prog);
+		goto error;
+	}
+	return;
 
 error:
 	// TODO fallback to B_NORMAL instead of aborting
