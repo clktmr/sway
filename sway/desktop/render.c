@@ -393,10 +393,11 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 
 	// render box shadow
 	struct style_box sbox = style_shadow_box(s);
-	box.x = state->content_x + sbox.x;
-	box.y = state->content_y + sbox.y;
-	box.width = state->content_width + sbox.width;
-	box.height = state->content_height + sbox.height;
+	struct style_box cbox = style_content_box(s);
+	box.x = state->content_x + sbox.x - cbox.x;
+	box.y = state->content_y + sbox.y - cbox.y;
+	box.width = state->content_width + sbox.width - cbox.width;
+	box.height = state->content_height + sbox.height - cbox.height;
 	scale_box(&box, output->wlr_output->scale);
 
 	float matrix[9];
