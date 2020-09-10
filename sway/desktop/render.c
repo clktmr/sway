@@ -393,15 +393,24 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 	render_style_border(output->wlr_output, damage, &con->style, &box, matrix);
 }
 
+static void render_animate_containers(struct sway_output *output,
+		list_t *containers, const struct timespec *when) {
+	for (int i = 0; i < containers->length; ++i) {
+		struct sway_container *child = containers->items[i];
+		if (!style_animate(&child->style, when)) {
+			output_damage_whole_container(output, child);
+		}
+		if(!child->view) {
+			render_animate_containers(output, child->current.children, when);
+		}
+	}
+}
+
 /**
  * Render a view's surface and left/bottom/right borders.
  */
 static void render_view(struct sway_output *output, pixman_region32_t *damage,
 		struct sway_container *con, struct border_colors *colors) {
-	if(style_animate(&con->style, &output->last_frame)) {
-		output_damage_whole_container(output, con);
-	}
-
 	struct sway_view *view = con->view;
 	if (view->saved_buffer) {
 		render_saved_view(view, output, damage, view->container->alpha);
@@ -957,10 +966,6 @@ static void render_containers(struct sway_output *output,
 
 static void render_container(struct sway_output *output,
 		pixman_region32_t *damage, struct sway_container *con, bool focused) {
-	if(style_animate(&con->style, &output->last_frame)) {
-		output_damage_whole_container(output, con);
-	}
-
 	struct parent_data data = {
 		.layout = con->current.layout,
 		.box = {
@@ -1195,4 +1200,9 @@ renderer_end:
 		return;
 	}
 	output->last_frame = *when;
+
+	// Do animations after the rendered frame was committed.  This will schedule
+	// the next frame by applying damage to the framebuffer.
+	render_animate_containers(output, workspace->current.tiling, when);
+	render_animate_containers(output, workspace->current.floating, when);
 }

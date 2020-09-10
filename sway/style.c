@@ -110,7 +110,7 @@ static float lerp(float v0, float v1, float t) {
 	return v0 + t * (v1 - v0);
 }
 
-bool style_animate(struct sway_style *s, struct timespec *when) {
+bool style_animate(struct sway_style *s, const struct timespec *when) {
 	bool ended = true;
 	for (size_t i = 0; i < STYLE_PROPS_SIZE; ++i) {
 		struct style_transition *trans = &s->transitions[i];

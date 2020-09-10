@@ -82,7 +82,7 @@ void style_set_scalar(struct sway_style *s, enum style_scalar prop, float val);
 const float *style_get_vector4(const struct sway_style *style, enum style_vector4 prop);
 void style_set_vector4(struct sway_style *s, enum style_vector4 prop, float val[4]);
 
-bool style_animate(struct sway_style *s, struct timespec *when);
+bool style_animate(struct sway_style *s, const struct timespec *when);
 
 /**
  * Returns the difference between translation and size of the content box in
