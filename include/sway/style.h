@@ -105,15 +105,32 @@ struct style_box style_box_union(const struct style_box *a,
 /**
  * TODO document
  */
-void style_render_shadow(struct sway_style *s, const struct wlr_box *box,
+void style_render_shadow(struct sway_style *s, const struct style_box *box,
 		const float matrix[static 9]);
 
 /**
  * TODO document
  */
-void style_render_borders(struct sway_style *s, const struct wlr_box *box,
+void style_render_borders(struct sway_style *s, const struct style_box *box,
 		const float matrix[static 9]);
 
 void style_shader_init(struct wlr_renderer *renderer);
+
+/**
+ * Returns a bounding box with integer precision for the style_box.
+ */
+void style_box_scale(struct style_box *box, float scale);
+
+/**
+ * Returns a bounding box with integer precision for the style_box.
+ */
+struct wlr_box style_box_bounds(const struct style_box *box);
+
+/**
+ * Same as wlr_matrix_project_box but with floats instead of ints.
+ */
+void style_matrix_project_box(float mat[static 9], const struct style_box *box,
+		enum wl_output_transform transform, float rotation,
+		const float projection[static 9]);
 
 #endif

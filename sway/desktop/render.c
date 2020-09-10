@@ -310,11 +310,12 @@ static void render_saved_view(struct sway_view *view,
 
 static void render_style_border(struct wlr_output *wlr_output,
 		pixman_region32_t *output_damage, struct sway_style *style,
-		const struct wlr_box *box, const float matrix[static 9]) {
+		const struct style_box *box, const float matrix[static 9]) {
+	struct wlr_box bbox = style_box_bounds(box);
 	pixman_region32_t damage;
 	pixman_region32_init(&damage);
-	pixman_region32_union_rect(&damage, &damage, box->x, box->y,
-		box->width, box->height);
+	pixman_region32_union_rect(&damage, &damage, bbox.x, bbox.y,
+		bbox.width, bbox.height);
 	pixman_region32_intersect(&damage, &damage, output_damage);
 	bool damaged = pixman_region32_not_empty(&damage);
 	if (!damaged) {
@@ -335,11 +336,12 @@ damage_finish:
 
 static void render_style_shadow(struct wlr_output *wlr_output,
 		pixman_region32_t *output_damage, struct sway_style *style,
-		const struct wlr_box *box, const float matrix[static 9]) {
+		const struct style_box *box, const float matrix[static 9]) {
+	struct wlr_box bbox = style_box_bounds(box);
 	pixman_region32_t damage;
 	pixman_region32_init(&damage);
-	pixman_region32_union_rect(&damage, &damage, box->x, box->y,
-		box->width, box->height);
+	pixman_region32_union_rect(&damage, &damage, bbox.x, bbox.y,
+		bbox.width, bbox.height);
 	pixman_region32_intersect(&damage, &damage, output_damage);
 	bool damaged = pixman_region32_not_empty(&damage);
 	if (!damaged) {
@@ -362,7 +364,7 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 		struct sway_container *con) {
 	struct sway_style *s = &con->style;
 	struct sway_container_state *state = &con->current;
-	struct wlr_box box;
+	struct style_box box;
 	struct style_box sbox = style_shadow_box(s);
 	struct style_box cbox = style_content_box(s);
 	float matrix[9];
@@ -372,9 +374,9 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 	box.y = state->content_y + sbox.y - cbox.y;
 	box.width = state->content_width + sbox.width - cbox.width;
 	box.height = state->content_height + sbox.height - cbox.height;
-	scale_box(&box, output->wlr_output->scale);
+	style_box_scale(&box, output->wlr_output->scale);
 
-	wlr_matrix_project_box(matrix, &box, WL_OUTPUT_TRANSFORM_NORMAL, 0,
+	style_matrix_project_box(matrix, &box, WL_OUTPUT_TRANSFORM_NORMAL, 0,
 			output->wlr_output->transform_matrix);
 
 	render_style_shadow(output->wlr_output, damage, &con->style, &box, matrix);
@@ -383,9 +385,9 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 	box.y = state->content_y - cbox.y;
 	box.width = state->content_width - cbox.width;
 	box.height = state->content_height - cbox.height;
-	scale_box(&box, output->wlr_output->scale);
+	style_box_scale(&box, output->wlr_output->scale);
 
-	wlr_matrix_project_box(matrix, &box, WL_OUTPUT_TRANSFORM_NORMAL, 0,
+	style_matrix_project_box(matrix, &box, WL_OUTPUT_TRANSFORM_NORMAL, 0,
 			output->wlr_output->transform_matrix);
 
 	render_style_border(output->wlr_output, damage, &con->style, &box, matrix);

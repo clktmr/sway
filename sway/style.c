@@ -127,6 +127,50 @@ bool style_animate(struct sway_style *s, struct timespec *when) {
 	return ended;
 }
 
+void style_box_scale(struct style_box *box, float scale) {
+	box->width = box->width * scale;
+	box->height = box->height * scale;
+	box->x = box->x * scale;
+	box->y = box->y * scale;
+}
+
+struct wlr_box style_box_bounds(const struct style_box *box) {
+	return (struct wlr_box) {
+		.x = floorl(box->x),
+		.y = floorl(box->y),
+		.width = ceill(box->width)+1,
+		.height = ceill(box->height)+1
+	};
+}
+
+void style_matrix_project_box(float mat[static 9], const struct style_box *box,
+		enum wl_output_transform transform, float rotation,
+		const float projection[static 9]) {
+	float x = box->x;
+	float y = box->y;
+	float width = box->width;
+	float height = box->height;
+
+	wlr_matrix_identity(mat);
+	wlr_matrix_translate(mat, x, y);
+
+	if (rotation != 0) {
+		wlr_matrix_translate(mat, width/2, height/2);
+		wlr_matrix_rotate(mat, rotation);
+		wlr_matrix_translate(mat, -width/2, -height/2);
+	}
+
+	wlr_matrix_scale(mat, width, height);
+
+	if (transform != WL_OUTPUT_TRANSFORM_NORMAL) {
+		wlr_matrix_translate(mat, 0.5, 0.5);
+		wlr_matrix_transform(mat, transform);
+		wlr_matrix_translate(mat, -0.5, -0.5);
+	}
+
+	wlr_matrix_multiply(mat, projection, mat);
+}
+
 const GLchar style_shader_vertex_src[] =
 "uniform mat3 proj;\n"
 "uniform vec4 fg_color;\n"
@@ -218,7 +262,7 @@ error:
 // Returns the vertices of two triangles in GL_CCW order composing a rectangle
 #define quad_verts(t, r, b, l) r,t,l,t,l,b,l,b,r,b,r,t,
 
-void style_render_shadow(struct sway_style *s, const struct wlr_box *box,
+void style_render_shadow(struct sway_style *s, const struct style_box *box,
 		const float matrix[static 9]) {
 	// OpenGL ES 2 requires the glUniformMatrix3fv transpose parameter to be set
 	// to GL_FALSE
@@ -304,7 +348,7 @@ void style_render_shadow(struct sway_style *s, const struct wlr_box *box,
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void style_render_borders(struct sway_style *s, const struct wlr_box *box,
+void style_render_borders(struct sway_style *s, const struct style_box *box,
 		const float matrix[static 9]) {
 	// OpenGL ES 2 requires the glUniformMatrix3fv transpose parameter to be set
 	// to GL_FALSE
