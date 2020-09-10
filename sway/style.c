@@ -276,8 +276,8 @@ void style_render_shadow(struct sway_style *s, const struct wlr_box *box,
 	};
 
 	// Note that pixels should be sampled in the center for proper interpolation
-	float px0 = 1.0f/16.0f/2.0f;
-	float px1 = 31.0f * px0;
+	float px0 = 0.5f/(float)gauss_lut_width;
+	float px1 = px0 * (float)(2*gauss_lut_width-1);
 	GLfloat texcoord[] = {
 		quad_verts(px1, px0, px0, px1)
 		quad_verts(px1, px0, px0, px0)
@@ -363,8 +363,8 @@ void style_render_borders(struct sway_style *s, const struct wlr_box *box,
 	};
 
 	// Note that pixels should be sampled in the center for proper interpolation
-	float px0 = 1.0f/16.0f/2.0f;
-	float px1 = 31.0f * px0;
+	float px0 = 0.5f/(float)gauss_lut_width;
+	float px1 = px0 * (float)(2*gauss_lut_width-1);
 	GLfloat texcoord[] = {
 		quad_verts(px0, px0, px0, px0)
 		quad_verts(px0, px0, px0, px0)
