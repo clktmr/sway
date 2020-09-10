@@ -114,8 +114,9 @@ bool style_animate(struct sway_style *s, struct timespec *when) {
 	bool ended = true;
 	for (size_t i = 0; i < STYLE_PROPS_SIZE; ++i) {
 		struct style_transition *trans = &s->transitions[i];
-		if (when->tv_sec <= trans->end.tv_sec &&
-				when->tv_nsec < trans->end.tv_nsec) {
+		if (when->tv_sec < trans->end.tv_sec ||
+				(when->tv_sec == trans->end.tv_sec &&
+				when->tv_nsec < trans->end.tv_nsec)) {
 			float begin = (float)trans->begin.tv_sec + trans->begin.tv_nsec/1.0e9f;
 			float end = (float)trans->end.tv_sec + trans->end.tv_nsec/1.0e9f;
 			float now = (float)when->tv_sec + when->tv_nsec/1.0e9f;
