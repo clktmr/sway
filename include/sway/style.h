@@ -1,6 +1,7 @@
 #ifndef _SWAY_STYLE_H
 #define _SWAY_STYLE_H
 #include <stdbool.h>
+#include <time.h>
 #include <wlr/types/wlr_box.h>
 #include <wlr/render/wlr_texture.h>
 
@@ -46,6 +47,11 @@ enum style_scalar {
 	SS_COUNT
 };
 
+struct style_transition {
+	struct timespec begin, end;
+	float from, to;
+};
+
 // Layout of the sway_style.props array
 enum {
 	STYLE_SV4_OFFSET = 0,
@@ -60,7 +66,7 @@ struct sway_style {
 	// be easily iterated over for e.g. animations.
 	float props[STYLE_PROPS_SIZE];
 
-	// TODO transitions[STYLE_PROPS_SIZE];
+	struct style_transition transitions[STYLE_PROPS_SIZE];
 };
 
 struct style_box {
@@ -75,6 +81,8 @@ float style_get_scalar(const struct sway_style *style, enum style_scalar prop);
 void style_set_scalar(struct sway_style *s, enum style_scalar prop, float val);
 const float *style_get_vector4(const struct sway_style *style, enum style_vector4 prop);
 void style_set_vector4(struct sway_style *s, enum style_vector4 prop, float val[4]);
+
+bool style_animate(struct sway_style *s, struct timespec *when);
 
 /**
  * Returns the difference between translation and size of the content box in

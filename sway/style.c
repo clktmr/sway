@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <string.h>
 #include <stddef.h>
+#include <time.h>
 #include <GLES2/gl2.h>
 #include <wlr/render/gles2.h>
 #include <wlr/render/wlr_texture.h>
@@ -32,6 +33,7 @@ GLuint gauss_lut_tex;
 GLuint style_shader_prog;
 
 void style_init(struct sway_style *s) {
+	memset(s->transitions, 0, sizeof(s->transitions));
 	for (size_t i = 0; i < STYLE_PROPS_SIZE; ++i) {
 		s->props[i] = -1.0f;
 	}
@@ -102,6 +104,27 @@ struct style_box style_box_union(const struct style_box *a,
 		.height = bottom - top,
 	};
 	return box;
+}
+
+static float lerp(float v0, float v1, float t) {
+	return v0 + t * (v1 - v0);
+}
+
+bool style_animate(struct sway_style *s, struct timespec *when) {
+	bool ended = true;
+	for (size_t i = 0; i < STYLE_PROPS_SIZE; ++i) {
+		struct style_transition *trans = &s->transitions[i];
+		if (when->tv_sec <= trans->end.tv_sec &&
+				when->tv_nsec < trans->end.tv_nsec) {
+			float begin = (float)trans->begin.tv_sec + trans->begin.tv_nsec/1.0e9f;
+			float end = (float)trans->end.tv_sec + trans->end.tv_nsec/1.0e9f;
+			float now = (float)when->tv_sec + when->tv_nsec/1.0e9f;
+			float t = (now-begin)/(end-begin);
+			s->props[i] = lerp(trans->from, trans->to, t);
+			ended = false;
+		}
+	}
+	return ended;
 }
 
 const GLchar style_shader_vertex_src[] =

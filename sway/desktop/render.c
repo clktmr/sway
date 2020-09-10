@@ -396,6 +396,10 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
  */
 static void render_view(struct sway_output *output, pixman_region32_t *damage,
 		struct sway_container *con, struct border_colors *colors) {
+	if(style_animate(&con->style, &output->last_frame)) {
+		output_damage_whole_container(output, con);
+	}
+
 	struct sway_view *view = con->view;
 	if (view->saved_buffer) {
 		render_saved_view(view, output, damage, view->container->alpha);
@@ -951,6 +955,10 @@ static void render_containers(struct sway_output *output,
 
 static void render_container(struct sway_output *output,
 		pixman_region32_t *damage, struct sway_container *con, bool focused) {
+	if(style_animate(&con->style, &output->last_frame)) {
+		output_damage_whole_container(output, con);
+	}
+
 	struct parent_data data = {
 		.layout = con->current.layout,
 		.box = {
