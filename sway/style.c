@@ -291,13 +291,13 @@ void style_render_shadow(struct sway_style *s, const struct style_box *box,
 	// will simply render with the box shadow color, while all other quads are
 	// used for shadow blur by sampling from a lookup table.
 	//
-	//   oe ┌───┬───┬───┐
+	//   ob ┌───┬───┬───┐
 	//      │ 0 │ 1 │ 2 │
 	//   it ├───┼───┼───┤
 	//      │ 3 │ 4 │ 5 │
 	//   ib ├───┼───┼───┤
 	//      │ 6 │ 7 │ 8 │
-	//   ob └───┴───┴───┘
+	//   oe └───┴───┴───┘
 	//      ob  il  ir  oe
 	//
 	// TODO Possible performance improvement by storing the mesh once in a
@@ -305,20 +305,20 @@ void style_render_shadow(struct sway_style *s, const struct style_box *box,
 	// ir as uniforms.
 	float blur = 2.0f * style_get_scalar(s, SS_BOX_SHADOW_BLUR);
 	float ob = 0.0f, oe = 1.0f;
-	float ib = blur / (float)box->height;
-	float it = oe - ib;
+	float it = blur / (float)box->height;
+	float ib = oe - it;
 	float il = blur / (float)box->width;
 	float ir = oe - il;
 	GLfloat verts[] = {
-		quad_verts(oe, il, it, ob)
-		quad_verts(oe, ir, it, il)
-		quad_verts(oe, oe, it, ir)
+		quad_verts(ob, il, it, ob)
+		quad_verts(ob, ir, it, il)
+		quad_verts(ob, oe, it, ir)
 		quad_verts(it, il, ib, ob)
 		quad_verts(it, ir, ib, il)
 		quad_verts(it, oe, ib, ir)
-		quad_verts(ib, il, ob, ob)
-		quad_verts(ib, ir, ob, il)
-		quad_verts(ib, oe, ob, ir)
+		quad_verts(ib, il, oe, ob)
+		quad_verts(ib, ir, oe, il)
+		quad_verts(ib, oe, oe, ir)
 	};
 
 	// Note that pixels should be sampled in the center for proper interpolation
@@ -379,13 +379,13 @@ void style_render_borders(struct sway_style *s, const struct style_box *box,
 	// will render with the background color, while all other quads are
 	// rendered with the border color.
 	//
-	//   oe ┌───┬───┬───┐
+	//   ob ┌───┬───┬───┐
 	//      │ 0 │ 1 │ 2 │
 	//   it ├───┼───┼───┤
 	//      │ 3 │ 4 │ 5 │
 	//   ib ├───┼───┼───┤
 	//      │ 6 │ 7 │ 8 │
-	//   ob └───┴───┴───┘
+	//   oe └───┴───┴───┘
 	//      ob  il  ir  oe
 	//
 	// TODO Possible performance improvement by storing the mesh once in a
@@ -393,20 +393,20 @@ void style_render_borders(struct sway_style *s, const struct style_box *box,
 	// ir as uniforms.
 	const float *bw = style_get_vector4(s, SV4_BORDER_WIDTH);
 	float ob = 0.0f, oe = 1.0f;
-	float ib = bw[SE_BOTTOM] / (float)box->height;
-	float it = oe - bw[SE_TOP] / (float)box->height;
+	float ib = oe - bw[SE_BOTTOM] / (float)box->height;
+	float it = bw[SE_TOP] / (float)box->height;
 	float il = bw[SE_LEFT] / (float)box->width;
 	float ir = oe - bw[SE_RIGHT] / (float)box->width;
 	GLfloat verts[] = {
-		quad_verts(oe, il, it, ob)
-		quad_verts(oe, ir, it, il)
-		quad_verts(oe, oe, it, ir)
+		quad_verts(ob, il, it, ob)
+		quad_verts(ob, ir, it, il)
+		quad_verts(ob, oe, it, ir)
 		quad_verts(it, il, ib, ob)
 		quad_verts(it, ir, ib, il)
 		quad_verts(it, oe, ib, ir)
-		quad_verts(ib, il, ob, ob)
-		quad_verts(ib, ir, ob, il)
-		quad_verts(ib, oe, ob, ir)
+		quad_verts(ib, il, oe, ob)
+		quad_verts(ib, ir, oe, il)
+		quad_verts(ib, oe, oe, ir)
 	};
 
 	// Note that pixels should be sampled in the center for proper interpolation
