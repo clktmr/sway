@@ -174,31 +174,25 @@ void style_matrix_project_box(float mat[static 9], const struct style_box *box,
 
 const GLchar style_shader_vertex_src[] =
 "uniform mat3 proj;\n"
-"uniform vec4 fg_color;\n"
-"uniform vec4 bg_color;\n"
 "attribute vec2 pos;\n"
 "attribute vec2 texcoord;\n"
-"varying vec4 v_fg_color;\n"
-"varying vec4 v_bg_color;\n"
 "varying vec2 v_texcoord;\n"
 "\n"
 "void main() {\n"
 "	gl_Position = vec4(proj * vec3(pos, 1.0), 1.0);\n"
-"	v_fg_color = fg_color;\n"
-"	v_bg_color = bg_color;\n"
 "	v_texcoord = texcoord;\n"
 "}\n";
 
 const GLchar style_shader_fragment_src[] =
 "precision mediump float;\n"
+"uniform vec4 fg_color;\n"
+"uniform vec4 bg_color;\n"
 "uniform sampler2D tex;\n"
-"varying vec4 v_fg_color;\n"
-"varying vec4 v_bg_color;\n"
 "varying vec2 v_texcoord;\n"
 "\n"
 "void main() {\n"
 "	float c = texture2D(tex, v_texcoord).a;\n"
-"	gl_FragColor = v_fg_color*c + v_bg_color*(1.0-c);\n"
+"	gl_FragColor = fg_color*c + bg_color*(1.0-c);\n"
 "}\n";
 
 static GLuint compile_shader(GLuint type, const GLchar *src) {
