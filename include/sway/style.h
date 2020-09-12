@@ -5,6 +5,9 @@
 #include <wlr/types/wlr_box.h>
 #include <wlr/render/wlr_texture.h>
 
+struct sway_output;
+struct sway_view;
+
 enum style_edge {
 	SE_TOP,
 	SE_RIGHT,
@@ -113,6 +116,12 @@ void style_render_shadow(struct sway_style *s, const struct style_box *box,
  */
 void style_render_borders(struct sway_style *s, const struct style_box *box,
 		const float matrix[static 9]);
+
+/**
+ * TODO document
+ */
+void style_render_view(struct sway_style * s, struct sway_view *view,
+		struct sway_output *output, pixman_region32_t *damage);
 
 void style_shader_init(struct wlr_renderer *renderer);
 

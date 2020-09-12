@@ -6,8 +6,11 @@
 #include <wlr/render/gles2.h>
 #include <wlr/render/wlr_texture.h>
 #include <wlr/types/wlr_matrix.h>
+#include <wlr/types/wlr_surface.h>
 #include "log.h"
+#include "sway/output.h"
 #include "sway/style.h"
+#include "sway/tree/view.h"
 
 // 16x16 lookup table for gaussian blur
 GLuint gauss_lut_width = 16;
@@ -31,6 +34,12 @@ GLbyte gauss_lut[] =
 
 GLuint gauss_lut_tex;
 GLuint style_shader_prog;
+GLuint style_shader_prog_exttex;
+
+struct render_data {
+	pixman_region32_t *damage;
+	struct sway_style *style;
+};
 
 void style_init(struct sway_style *s) {
 	memset(s->transitions, 0, sizeof(s->transitions));
@@ -195,6 +204,16 @@ const GLchar style_shader_fragment_src[] =
 "	gl_FragColor = fg_color*c + bg_color*(1.0-c);\n"
 "}\n";
 
+const GLchar style_shader_fragment_src_extex[] =
+"#extension GL_OES_EGL_image_external : require\n\n"
+"precision mediump float;\n"
+"uniform samplerExternalOES tex;\n"
+"varying vec2 v_texcoord;\n"
+"\n"
+"void main() {\n"
+"	gl_FragColor = texture2D(tex, v_texcoord);\n"
+"}\n";
+
 static GLuint compile_shader(GLuint type, const GLchar *src) {
 	GLuint shader = glCreateShader(type);
 	glShaderSource(shader, 1, &src, NULL);
@@ -231,22 +250,43 @@ void style_shader_init(struct wlr_renderer *renderer) {
 		goto error;
 	}
 
+	GLuint frag_exttex = compile_shader(GL_FRAGMENT_SHADER, style_shader_fragment_src_extex);
+	if (!frag_exttex) {
+		glDeleteShader(frag);
+		glDeleteShader(vert);
+		goto error;
+	}
+
+	GLint ok;
 	style_shader_prog = glCreateProgram();
 	glAttachShader(style_shader_prog, vert);
 	glAttachShader(style_shader_prog, frag);
 	glLinkProgram(style_shader_prog);
-
 	glDetachShader(style_shader_prog, vert);
 	glDetachShader(style_shader_prog, frag);
-	glDeleteShader(vert);
-	glDeleteShader(frag);
-
-	GLint ok;
 	glGetProgramiv(style_shader_prog, GL_LINK_STATUS, &ok);
 	if (ok == GL_FALSE) {
 		glDeleteProgram(style_shader_prog);
 		goto error;
 	}
+
+	style_shader_prog_exttex = glCreateProgram();
+	glAttachShader(style_shader_prog_exttex, vert);
+	glAttachShader(style_shader_prog_exttex, frag_exttex);
+	glLinkProgram(style_shader_prog_exttex);
+	glDetachShader(style_shader_prog_exttex, vert);
+	glDetachShader(style_shader_prog_exttex, frag);
+	glGetProgramiv(style_shader_prog_exttex, GL_LINK_STATUS, &ok);
+	if (ok == GL_FALSE) {
+		glDeleteProgram(style_shader_prog);
+		glDeleteProgram(style_shader_prog_exttex);
+		goto error;
+	}
+
+	glDeleteShader(vert);
+	glDeleteShader(frag);
+	glDeleteShader(frag_exttex);
+
 	return;
 
 error:
@@ -430,4 +470,101 @@ void style_render_borders(struct sway_style *s, const struct style_box *box,
 	glDisableVertexAttribArray(1);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+static void style_render_surface(struct sway_output *output, struct sway_view *view,
+		struct wlr_surface *surface, struct wlr_box *_box, float rotation,
+		void *_data) {
+	struct wlr_output *wlr_output = output->wlr_output;
+
+	// TODO Render only damage instead of the whole surface
+
+	struct wlr_box box = *_box;
+	scale_box(&box, wlr_output->scale);
+
+	float matrix[9];
+	enum wl_output_transform transform =
+		wlr_output_transform_invert(surface->current.transform);
+	wlr_matrix_project_box(matrix, &box, transform, rotation,
+		wlr_output->transform_matrix);
+
+	// OpenGL ES 2 requires the glUniformMatrix3fv transpose parameter to be set
+	// to GL_FALSE
+	float transposition[9];
+	wlr_matrix_transpose(transposition, matrix);
+
+	struct wlr_texture *texture = wlr_surface_get_texture(surface);
+	if (!texture || !wlr_texture_is_gles2(texture)) {
+		return;
+	}
+
+	struct wlr_gles2_texture_attribs attribs;
+	wlr_gles2_texture_get_attribs(texture, &attribs);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(attribs.target, attribs.tex);
+	glTexParameteri(attribs.target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(attribs.target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// TODO Select shader based on texture target:
+	//		switch (attribs.target) {
+	//		case GL_TEXTURE_2D:
+	//			glUseProgram(style_shader_prog_tex);
+	//			break;
+	//		case GL_TEXTURE_EXTERNAL_OES:
+	//			glUseProgram(style_shader_prog_exttex);
+	//			break;
+	//		}
+
+	glUseProgram(style_shader_prog_exttex);
+
+	GLint proj_uniform = glGetUniformLocation(style_shader_prog_exttex, "proj");
+	GLint tex_uniform = glGetUniformLocation(style_shader_prog_exttex, "tex");
+	glUniform1i(tex_uniform, 0);
+	glUniformMatrix3fv(proj_uniform, 1, GL_FALSE, transposition);
+
+	GLfloat verts[]    = { quad_verts(0.0f, 1.0f, 1.0f, 0.0f) };
+	GLfloat texcoord[] = { quad_verts(0.0f, 1.0f, 1.0f, 0.0f) };
+
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, verts);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, texcoord);
+
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+
+	glDrawArrays(GL_TRIANGLES, 0, sizeof(verts)/sizeof(*verts)/2);
+
+	glDisableVertexAttribArray(0);
+	glDisableVertexAttribArray(1);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	// XXX Is this ok if we have opacity?
+	wlr_presentation_surface_sampled_on_output(server.presentation, surface,
+		wlr_output);
+}
+
+void style_render_view(struct sway_style * s, struct sway_view *view,
+		struct sway_output *output, pixman_region32_t *damage) {
+	if (view->saved_buffer) {
+		// TODO
+		/* render_saved_view(view, output, damage, view->container->alpha); */
+		return;
+	}
+
+	if (!view->surface) {
+		return;
+	}
+
+	struct render_data data = {
+		.damage = damage,
+		.style = s,
+	};
+	// Render all toplevels without descending into popups
+	double ox = view->container->surface_x -
+		output->lx - view->geometry.x;
+	double oy = view->container->surface_y -
+		output->ly - view->geometry.y;
+	output_surface_for_each_surface(output, view->surface, ox, oy,
+			style_render_surface, &data);
 }

@@ -807,7 +807,12 @@ static void render_containers_linear(struct sway_output *output,
 			} else if (state->border == B_STYLE) {
 				render_style(output, damage, child);
 			}
-			render_view(output, damage, child, colors);
+
+			if (state->border == B_STYLE) {
+				style_render_view(&child->style, child->view, output, damage);
+			} else {
+				render_view(output, damage, child, colors);
+			}
 		} else {
 			render_container(output, damage, child,
 					parent->focused || child->current.focused);
@@ -1029,7 +1034,12 @@ static void render_floating_container(struct sway_output *soutput,
 		} else if (con->current.border == B_STYLE) {
 			render_style(soutput, damage, con);
 		}
-		render_view(soutput, damage, con, colors);
+
+		if (con->current.border == B_STYLE) {
+			style_render_view(&con->style, con->view, soutput, damage);
+		} else {
+			render_view(soutput, damage, con, colors);
+		}
 	} else {
 		render_container(soutput, damage, con, con->current.focused);
 	}
