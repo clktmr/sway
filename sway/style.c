@@ -270,7 +270,7 @@ void style_shader_init(struct wlr_renderer *renderer) {
 	glAttachShader(style_shader_prog_exttex, frag_exttex);
 	glLinkProgram(style_shader_prog_exttex);
 	glDetachShader(style_shader_prog_exttex, vert);
-	glDetachShader(style_shader_prog_exttex, frag);
+	glDetachShader(style_shader_prog_exttex, frag_exttex);
 	glGetProgramiv(style_shader_prog_exttex, GL_LINK_STATUS, &ok);
 	if (ok == GL_FALSE) {
 		glDeleteProgram(style_shader_prog);
