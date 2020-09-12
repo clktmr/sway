@@ -292,8 +292,10 @@ error:
 // Returns the vertices of two triangles in GL_CCW order composing a rectangle
 #define quad_verts(t, r, b, l) r,t,l,t,l,b,l,b,r,b,r,t,
 
-void style_render_shadow(struct sway_style *s, const struct style_box *box,
+void style_render_shadow(struct style_render_data *data,
 		const float matrix[static 9]) {
+	struct sway_style *s = data->style;
+	const struct style_box *box = &data->box;
 	// OpenGL ES 2 requires the glUniformMatrix3fv transpose parameter to be set
 	// to GL_FALSE
 	float transposition[9];
@@ -379,8 +381,10 @@ void style_render_shadow(struct sway_style *s, const struct style_box *box,
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void style_render_borders(struct sway_style *s, const struct style_box *box,
+void style_render_borders(struct style_render_data *data,
 		const float matrix[static 9]) {
+	struct sway_style *s = data->style;
+	const struct style_box *box = &data->box;
 	// OpenGL ES 2 requires the glUniformMatrix3fv transpose parameter to be set
 	// to GL_FALSE
 	float transposition[9];
@@ -467,31 +471,14 @@ void style_render_borders(struct sway_style *s, const struct style_box *box,
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-static void style_render_surface(struct sway_output *output, struct sway_view *view,
-		struct wlr_surface *surface, struct wlr_box *_box, float rotation,
-		void *_data) {
-	struct wlr_output *wlr_output = output->wlr_output;
-
-	// TODO Render only damage instead of the whole surface
-
-	struct wlr_box box = *_box;
-	scale_box(&box, wlr_output->scale);
-
-	float matrix[9];
-	enum wl_output_transform transform =
-		wlr_output_transform_invert(surface->current.transform);
-	wlr_matrix_project_box(matrix, &box, transform, rotation,
-		wlr_output->transform_matrix);
+static void style_render_texture(struct style_render_data *data,
+		const float matrix[static 9]) {
+	struct wlr_texture *texture = data->texture;
 
 	// OpenGL ES 2 requires the glUniformMatrix3fv transpose parameter to be set
 	// to GL_FALSE
 	float transposition[9];
 	wlr_matrix_transpose(transposition, matrix);
-
-	struct wlr_texture *texture = wlr_surface_get_texture(surface);
-	if (!texture || !wlr_texture_is_gles2(texture)) {
-		return;
-	}
 
 	struct wlr_gles2_texture_attribs attribs;
 	wlr_gles2_texture_get_attribs(texture, &attribs);
@@ -533,17 +520,73 @@ static void style_render_surface(struct sway_output *output, struct sway_view *v
 	glDisableVertexAttribArray(1);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+static void style_render_surface(struct sway_output *output,
+		struct sway_view *view, struct wlr_surface *surface,
+		struct wlr_box *_box, float rotation, void *_data) {
+	struct style_render_data *data = _data;
+	struct wlr_output *wlr_output = output->wlr_output;
+
+	data->texture = wlr_surface_get_texture(surface);
+	if (!data->texture || !wlr_texture_is_gles2(data->texture)) {
+		return;
+	}
+	data->transform = wlr_output_transform_invert(surface->current.transform);
+	data->box = (struct style_box){
+		.x = _box->x,
+		.y = _box->y,
+		.width = _box->width,
+		.height = _box->height,
+	};
+	style_box_scale(&data->box, wlr_output->scale);
+	style_render_damaged(wlr_output, style_render_texture, data);
 
 	// XXX Is this ok if we have opacity?
 	wlr_presentation_surface_sampled_on_output(server.presentation, surface,
 		wlr_output);
 }
 
-void style_render_view(struct sway_style * s, struct sway_view *view,
+void style_render_view(struct sway_style *s, struct sway_view *view,
 		struct sway_output *output, pixman_region32_t *damage) {
 	if (view->saved_buffer) {
-		// TODO
-		/* render_saved_view(view, output, damage, view->container->alpha); */
+		struct wlr_output *wlr_output = output->wlr_output;
+		if (!view->saved_buffer || !view->saved_buffer->texture) {
+			return;
+		}
+		struct wlr_box box = {
+			.x = view->container->surface_x - output->lx -
+				view->saved_geometry.x,
+			.y = view->container->surface_y - output->ly -
+				view->saved_geometry.y,
+			.width = view->saved_buffer_width,
+			.height = view->saved_buffer_height,
+		};
+
+		struct wlr_box output_box = {
+			.width = output->width,
+			.height = output->height,
+		};
+
+		struct wlr_box intersection;
+		bool intersects = wlr_box_intersection(&intersection, &output_box, &box);
+		if (!intersects) {
+			return;
+		}
+
+		struct style_render_data data = {
+			.damage = damage,
+			.style = s,
+			.box = {
+				.x = box.x,
+				.y = box.y,
+				.width = box.width,
+				.height = box.height,
+			},
+			.texture = view->saved_buffer->texture,
+		};
+		style_box_scale(&data.box, wlr_output->scale);
+		style_render_damaged(wlr_output, style_render_texture, &data);
 		return;
 	}
 

@@ -2,8 +2,10 @@
 #define _SWAY_STYLE_H
 #include <stdbool.h>
 #include <time.h>
-#include <wlr/types/wlr_box.h>
+#include <wayland-server-protocol.h>
 #include <wlr/render/wlr_texture.h>
+#include <wlr/types/wlr_box.h>
+#include <wlr/types/wlr_output.h>
 
 struct sway_output;
 struct sway_view;
@@ -79,10 +81,13 @@ struct style_box {
 struct style_render_data {
 	pixman_region32_t *damage;
 	struct sway_style *style;
+	struct wlr_texture *texture;
+	struct style_box box;
+	enum wl_output_transform transform;
 };
 
-typedef void (*style_render_func_t)(struct sway_style *s,
-		const struct style_box *box, const float matrix[static 9]);
+typedef void (*style_render_func_t)(struct style_render_data *data,
+		const float matrix[static 9]);
 
 void style_init(struct sway_style *style);
 
@@ -113,16 +118,19 @@ struct style_box style_shadow_box(const struct sway_style *s);
 struct style_box style_box_union(const struct style_box *a,
 		const struct style_box *b);
 
+void style_render_damaged(struct wlr_output *wlr_output,
+		style_render_func_t render_func, struct style_render_data *data);
+
 /**
  * TODO document
  */
-void style_render_shadow(struct sway_style *s, const struct style_box *box,
+void style_render_shadow(struct style_render_data *data,
 		const float matrix[static 9]);
 
 /**
  * TODO document
  */
-void style_render_borders(struct sway_style *s, const struct style_box *box,
+void style_render_borders(struct style_render_data *data,
 		const float matrix[static 9]);
 
 /**

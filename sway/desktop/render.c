@@ -310,15 +310,13 @@ static void render_saved_view(struct sway_view *view,
 
 /**
  * Calls the given render function for each damaged rect.
+ *
+ * TODO This should be defined in style.c and is only here because of the static
+ * function scissor_output.  Consider refactor.
  */
-void render_style_damaged(struct wlr_output *wlr_output,
-		style_render_func_t render_func, struct style_render_data *data,
-		const struct style_box *box) {
-	float matrix[9];
-	style_matrix_project_box(matrix, box, WL_OUTPUT_TRANSFORM_NORMAL, 0,
-			wlr_output->transform_matrix);
-
-	struct wlr_box bbox = style_box_bounds(box);
+void style_render_damaged(struct wlr_output *wlr_output,
+		style_render_func_t render_func, struct style_render_data *data) {
+	struct wlr_box bbox = style_box_bounds(&data->box);
 	pixman_region32_t damage;
 	pixman_region32_init(&damage);
 	pixman_region32_union_rect(&damage, &damage, bbox.x, bbox.y,
@@ -329,11 +327,15 @@ void render_style_damaged(struct wlr_output *wlr_output,
 		goto damage_finish;
 	}
 
+	float matrix[9];
+	style_matrix_project_box(matrix, &data->box, data->transform, 0,
+			wlr_output->transform_matrix);
+
 	int nrects;
 	pixman_box32_t *rects = pixman_region32_rectangles(&damage, &nrects);
 	for (int i = 0; i < nrects; ++i) {
 		scissor_output(wlr_output, &rects[i]);
-		render_func(data->style, box, matrix);
+		render_func(data, matrix);
 	}
 
 damage_finish:
@@ -344,29 +346,30 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 		struct sway_container *con) {
 	struct sway_style *s = &con->style;
 	struct sway_container_state *state = &con->current;
-	struct style_box box;
 	struct style_box sbox = style_shadow_box(s);
 	struct style_box cbox = style_content_box(s);
 	struct style_render_data data = {
 		.damage = damage,
 		.style = &con->style,
+		.transform = WL_OUTPUT_TRANSFORM_NORMAL,
+		.texture = NULL,
 	};
 
 	// render box shadow
-	box.x = state->content_x + sbox.x - cbox.x;
-	box.y = state->content_y + sbox.y - cbox.y;
-	box.width = state->content_width + sbox.width - cbox.width;
-	box.height = state->content_height + sbox.height - cbox.height;
-	style_box_scale(&box, output->wlr_output->scale);
-	render_style_damaged(output->wlr_output, style_render_shadow, &data, &box);
+	data.box.x = state->content_x + sbox.x - cbox.x;
+	data.box.y = state->content_y + sbox.y - cbox.y;
+	data.box.width = state->content_width + sbox.width - cbox.width;
+	data.box.height = state->content_height + sbox.height - cbox.height;
+	style_box_scale(&data.box, output->wlr_output->scale);
+	style_render_damaged(output->wlr_output, style_render_shadow, &data);
 
 	// render borders
-	box.x = state->content_x - cbox.x;
-	box.y = state->content_y - cbox.y;
-	box.width = state->content_width - cbox.width;
-	box.height = state->content_height - cbox.height;
-	style_box_scale(&box, output->wlr_output->scale);
-	render_style_damaged(output->wlr_output, style_render_borders, &data, &box);
+	data.box.x = state->content_x - cbox.x;
+	data.box.y = state->content_y - cbox.y;
+	data.box.width = state->content_width - cbox.width;
+	data.box.height = state->content_height - cbox.height;
+	style_box_scale(&data.box, output->wlr_output->scale);
+	style_render_damaged(output->wlr_output, style_render_borders, &data);
 }
 
 static void render_animate_containers(struct sway_output *output,
