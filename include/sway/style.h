@@ -141,9 +141,6 @@ void style_render_view(struct sway_style * s, struct sway_view *view,
 
 void style_shader_init(struct wlr_renderer *renderer);
 
-/**
- * Returns a bounding box with integer precision for the style_box.
- */
 void style_box_scale(struct style_box *box, float scale);
 
 /**
