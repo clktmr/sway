@@ -76,6 +76,14 @@ struct style_box {
 	float x, y, width, height;
 };
 
+struct style_render_data {
+	pixman_region32_t *damage;
+	struct sway_style *style;
+};
+
+typedef void (*style_render_func_t)(struct sway_style *s,
+		const struct style_box *box, const float matrix[static 9]);
+
 void style_init(struct sway_style *style);
 
 void style_inherit(struct sway_style *style, const struct sway_style *from);

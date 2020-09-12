@@ -308,15 +308,22 @@ static void render_saved_view(struct sway_view *view,
 	// https://github.com/swaywm/sway/pull/4465#discussion_r321082059
 }
 
-static void render_style_border(struct wlr_output *wlr_output,
-		pixman_region32_t *output_damage, struct sway_style *style,
-		const struct style_box *box, const float matrix[static 9]) {
+/**
+ * Calls the given render function for each damaged rect.
+ */
+void render_style_damaged(struct wlr_output *wlr_output,
+		style_render_func_t render_func, struct style_render_data *data,
+		const struct style_box *box) {
+	float matrix[9];
+	style_matrix_project_box(matrix, box, WL_OUTPUT_TRANSFORM_NORMAL, 0,
+			wlr_output->transform_matrix);
+
 	struct wlr_box bbox = style_box_bounds(box);
 	pixman_region32_t damage;
 	pixman_region32_init(&damage);
 	pixman_region32_union_rect(&damage, &damage, bbox.x, bbox.y,
 		bbox.width, bbox.height);
-	pixman_region32_intersect(&damage, &damage, output_damage);
+	pixman_region32_intersect(&damage, &damage, data->damage);
 	bool damaged = pixman_region32_not_empty(&damage);
 	if (!damaged) {
 		goto damage_finish;
@@ -326,34 +333,7 @@ static void render_style_border(struct wlr_output *wlr_output,
 	pixman_box32_t *rects = pixman_region32_rectangles(&damage, &nrects);
 	for (int i = 0; i < nrects; ++i) {
 		scissor_output(wlr_output, &rects[i]);
-		/* set_scale_filter(wlr_output, texture, output->scale_filter); */
-		style_render_borders(style, box, matrix);
-	}
-
-damage_finish:
-	pixman_region32_fini(&damage);
-}
-
-static void render_style_shadow(struct wlr_output *wlr_output,
-		pixman_region32_t *output_damage, struct sway_style *style,
-		const struct style_box *box, const float matrix[static 9]) {
-	struct wlr_box bbox = style_box_bounds(box);
-	pixman_region32_t damage;
-	pixman_region32_init(&damage);
-	pixman_region32_union_rect(&damage, &damage, bbox.x, bbox.y,
-		bbox.width, bbox.height);
-	pixman_region32_intersect(&damage, &damage, output_damage);
-	bool damaged = pixman_region32_not_empty(&damage);
-	if (!damaged) {
-		goto damage_finish;
-	}
-
-	int nrects;
-	pixman_box32_t *rects = pixman_region32_rectangles(&damage, &nrects);
-	for (int i = 0; i < nrects; ++i) {
-		scissor_output(wlr_output, &rects[i]);
-		/* set_scale_filter(wlr_output, texture, output->scale_filter); */
-		style_render_shadow(style, box, matrix);
+		render_func(data->style, box, matrix);
 	}
 
 damage_finish:
@@ -367,7 +347,10 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 	struct style_box box;
 	struct style_box sbox = style_shadow_box(s);
 	struct style_box cbox = style_content_box(s);
-	float matrix[9];
+	struct style_render_data data = {
+		.damage = damage,
+		.style = &con->style,
+	};
 
 	// render box shadow
 	box.x = state->content_x + sbox.x - cbox.x;
@@ -375,22 +358,15 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 	box.width = state->content_width + sbox.width - cbox.width;
 	box.height = state->content_height + sbox.height - cbox.height;
 	style_box_scale(&box, output->wlr_output->scale);
+	render_style_damaged(output->wlr_output, style_render_shadow, &data, &box);
 
-	style_matrix_project_box(matrix, &box, WL_OUTPUT_TRANSFORM_NORMAL, 0,
-			output->wlr_output->transform_matrix);
-
-	render_style_shadow(output->wlr_output, damage, &con->style, &box, matrix);
-
+	// render borders
 	box.x = state->content_x - cbox.x;
 	box.y = state->content_y - cbox.y;
 	box.width = state->content_width - cbox.width;
 	box.height = state->content_height - cbox.height;
 	style_box_scale(&box, output->wlr_output->scale);
-
-	style_matrix_project_box(matrix, &box, WL_OUTPUT_TRANSFORM_NORMAL, 0,
-			output->wlr_output->transform_matrix);
-
-	render_style_border(output->wlr_output, damage, &con->style, &box, matrix);
+	render_style_damaged(output->wlr_output, style_render_borders, &data, &box);
 }
 
 static void render_animate_containers(struct sway_output *output,

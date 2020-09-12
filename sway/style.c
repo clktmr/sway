@@ -36,11 +36,6 @@ GLuint gauss_lut_tex;
 GLuint style_shader_prog;
 GLuint style_shader_prog_exttex;
 
-struct render_data {
-	pixman_region32_t *damage;
-	struct sway_style *style;
-};
-
 void style_init(struct sway_style *s) {
 	memset(s->transitions, 0, sizeof(s->transitions));
 	for (size_t i = 0; i < STYLE_PROPS_SIZE; ++i) {
@@ -556,7 +551,7 @@ void style_render_view(struct sway_style * s, struct sway_view *view,
 		return;
 	}
 
-	struct render_data data = {
+	struct style_render_data data = {
 		.damage = damage,
 		.style = s,
 	};
