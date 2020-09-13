@@ -355,18 +355,22 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 	};
 
 	// render box shadow
-	data.box.x = state->x + sbox.x;
-	data.box.y = state->y + sbox.y;
-	data.box.width = state->width + sbox.width;
-	data.box.height = state->height + sbox.height;
+	data.box = (struct style_box){
+		.x = state->x + sbox.x,
+		.y = state->y + sbox.y,
+		.width = state->width + sbox.width,
+		.height = state->height + sbox.height,
+	};
 	style_box_scale(&data.box, output->wlr_output->scale);
 	style_render_damaged(output->wlr_output, style_render_shadow, &data);
 
 	// render borders
-	data.box.x = state->x;
-	data.box.y = state->y;
-	data.box.width = state->width;
-	data.box.height = state->height;
+	data.box = (struct style_box){
+		.x = state->x + style_get_scalar(s, SS_TRANSLATION_X),
+		.y = state->y + style_get_scalar(s, SS_TRANSLATION_Y),
+		.width = state->width,
+		.height = state->height,
+	};
 	style_box_scale(&data.box, output->wlr_output->scale);
 	style_render_damaged(output->wlr_output, style_render_borders, &data);
 }

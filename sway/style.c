@@ -488,7 +488,9 @@ static void style_render_texture(struct style_render_data *data,
 	glTexParameteri(attribs.target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(attribs.target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	// TODO Select shader based on texture target:
+	// TODO Check texture attributes (alpha, y_invert) and select shader based
+	// on texture target:
+	//
 	//		switch (attribs.target) {
 	//		case GL_TEXTURE_2D:
 	//			glUseProgram(style_shader_prog_tex);
@@ -534,8 +536,8 @@ static void style_render_surface(struct sway_output *output,
 	}
 	data->transform = wlr_output_transform_invert(surface->current.transform);
 	data->box = (struct style_box){
-		.x = _box->x,
-		.y = _box->y,
+		.x = _box->x + style_get_scalar(data->style, SS_TRANSLATION_X),
+		.y = _box->y + style_get_scalar(data->style, SS_TRANSLATION_Y),
 		.width = _box->width,
 		.height = _box->height,
 	};
@@ -554,37 +556,32 @@ void style_render_view(struct sway_style *s, struct sway_view *view,
 		if (!view->saved_buffer || !view->saved_buffer->texture) {
 			return;
 		}
-		struct wlr_box box = {
-			.x = view->container->surface_x - output->lx -
-				view->saved_geometry.x,
-			.y = view->container->surface_y - output->ly -
-				view->saved_geometry.y,
-			.width = view->saved_buffer_width,
-			.height = view->saved_buffer_height,
+		struct style_render_data data = {
+			.damage = damage,
+			.style = s,
+			.box = {
+				.x = view->container->surface_x - output->lx -
+					view->saved_geometry.x +
+					style_get_scalar(s, SS_TRANSLATION_X),
+				.y = view->container->surface_y - output->ly -
+					view->saved_geometry.y +
+					style_get_scalar(s, SS_TRANSLATION_Y),
+				.width = view->saved_buffer_width,
+				.height = view->saved_buffer_height,
+			},
+			.texture = view->saved_buffer->texture,
 		};
 
 		struct wlr_box output_box = {
 			.width = output->width,
 			.height = output->height,
 		};
-
 		struct wlr_box intersection;
-		bool intersects = wlr_box_intersection(&intersection, &output_box, &box);
-		if (!intersects) {
+		struct wlr_box bounds = style_box_bounds(&data.box);
+		if (!wlr_box_intersection(&intersection, &output_box, &bounds)) {
 			return;
 		}
 
-		struct style_render_data data = {
-			.damage = damage,
-			.style = s,
-			.box = {
-				.x = box.x,
-				.y = box.y,
-				.width = box.width,
-				.height = box.height,
-			},
-			.texture = view->saved_buffer->texture,
-		};
 		style_box_scale(&data.box, wlr_output->scale);
 		style_render_damaged(wlr_output, style_render_texture, &data);
 		return;
