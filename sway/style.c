@@ -143,7 +143,10 @@ void style_animate_containers(struct sway_output *output, list_t *containers,
 
 	for (int i = 0; i < containers->length; ++i) {
 		struct sway_container *child = containers->items[i];
-		if (!style_animate(&child->style, &when)) {
+		struct sway_style new_style = child->style;
+		if (!style_animate(&new_style, &when)) {
+			output_damage_whole_container(output, child);
+			child->style = new_style;
 			output_damage_whole_container(output, child);
 		}
 		if(!child->view) {
