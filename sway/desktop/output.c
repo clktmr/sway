@@ -23,6 +23,7 @@
 #include "sway/layers.h"
 #include "sway/output.h"
 #include "sway/server.h"
+#include "sway/style.h"
 #include "sway/surface.h"
 #include "sway/tree/arrange.h"
 #include "sway/tree/container.h"
@@ -547,6 +548,12 @@ int output_repaint_timer_handler(void *data) {
 		}
 	}
 
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+
+	style_animate_containers(output, workspace->current.tiling, now);
+	style_animate_containers(output, workspace->current.floating, now);
+
 	bool needs_frame;
 	pixman_region32_t damage;
 	pixman_region32_init(&damage);
@@ -556,9 +563,6 @@ int output_repaint_timer_handler(void *data) {
 	}
 
 	if (needs_frame) {
-		struct timespec now;
-		clock_gettime(CLOCK_MONOTONIC, &now);
-
 		output_render(output, &now, &damage);
 	} else {
 		wlr_output_rollback(output->wlr_output);

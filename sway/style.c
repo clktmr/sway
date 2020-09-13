@@ -132,6 +132,26 @@ bool style_animate(struct sway_style *s, const struct timespec *when) {
 	return ended;
 }
 
+void style_animate_containers(struct sway_output *output, list_t *containers,
+		struct timespec when) {
+	// Snap the animation time to the outputs refresh rate to prevent jitter in
+	// the animation.
+	if (output->refresh_nsec) {
+		when.tv_nsec = (when.tv_nsec / output->refresh_nsec) *
+			output->refresh_nsec;
+	}
+
+	for (int i = 0; i < containers->length; ++i) {
+		struct sway_container *child = containers->items[i];
+		if (!style_animate(&child->style, &when)) {
+			output_damage_whole_container(output, child);
+		}
+		if(!child->view) {
+			style_animate_containers(output, child->current.children, when);
+		}
+	}
+}
+
 void style_box_scale(struct style_box *box, float scale) {
 	box->width = box->width * scale;
 	box->height = box->height * scale;

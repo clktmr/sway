@@ -376,19 +376,6 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 	style_render_damaged(output->wlr_output, style_render_borders, &data);
 }
 
-static void render_animate_containers(struct sway_output *output,
-		list_t *containers, const struct timespec *when) {
-	for (int i = 0; i < containers->length; ++i) {
-		struct sway_container *child = containers->items[i];
-		if (!style_animate(&child->style, when)) {
-			output_damage_whole_container(output, child);
-		}
-		if(!child->view) {
-			render_animate_containers(output, child->current.children, when);
-		}
-	}
-}
-
 /**
  * Render a view's surface and left/bottom/right borders.
  */
@@ -1193,9 +1180,4 @@ renderer_end:
 		return;
 	}
 	output->last_frame = *when;
-
-	// Do animations after the rendered frame was committed.  This will schedule
-	// the next frame by applying damage to the framebuffer.
-	render_animate_containers(output, workspace->current.tiling, when);
-	render_animate_containers(output, workspace->current.floating, when);
 }

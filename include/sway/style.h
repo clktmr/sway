@@ -6,6 +6,7 @@
 #include <wlr/render/wlr_texture.h>
 #include <wlr/types/wlr_box.h>
 #include <wlr/types/wlr_output.h>
+#include "list.h"
 
 struct sway_output;
 struct sway_view;
@@ -100,6 +101,9 @@ const float *style_get_vector4(const struct sway_style *style, enum style_vector
 void style_set_vector4(struct sway_style *s, enum style_vector4 prop, float val[4]);
 
 bool style_animate(struct sway_style *s, const struct timespec *when);
+
+void style_animate_containers(struct sway_output *output, list_t *containers,
+		struct timespec when);
 
 /**
  * Returns the difference between translation and size of the content box in
