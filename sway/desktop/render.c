@@ -347,7 +347,6 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 	struct sway_style *s = &con->style;
 	struct sway_container_state *state = &con->current;
 	struct style_box sbox = style_shadow_box(s);
-	struct style_box cbox = style_content_box(s);
 	struct style_render_data data = {
 		.damage = damage,
 		.style = &con->style,
@@ -356,18 +355,18 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 	};
 
 	// render box shadow
-	data.box.x = state->content_x + sbox.x - cbox.x;
-	data.box.y = state->content_y + sbox.y - cbox.y;
-	data.box.width = state->content_width + sbox.width - cbox.width;
-	data.box.height = state->content_height + sbox.height - cbox.height;
+	data.box.x = state->x + sbox.x;
+	data.box.y = state->y + sbox.y;
+	data.box.width = state->width + sbox.width;
+	data.box.height = state->height + sbox.height;
 	style_box_scale(&data.box, output->wlr_output->scale);
 	style_render_damaged(output->wlr_output, style_render_shadow, &data);
 
 	// render borders
-	data.box.x = state->content_x - cbox.x;
-	data.box.y = state->content_y - cbox.y;
-	data.box.width = state->content_width - cbox.width;
-	data.box.height = state->content_height - cbox.height;
+	data.box.x = state->x;
+	data.box.y = state->y;
+	data.box.width = state->width;
+	data.box.height = state->height;
 	style_box_scale(&data.box, output->wlr_output->scale);
 	style_render_damaged(output->wlr_output, style_render_borders, &data);
 }
