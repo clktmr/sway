@@ -355,10 +355,12 @@ void style_render_shadow(struct style_render_data *data,
 	// global VBO and animate it in the vertex shader by passing it, ib, il and
 	// ir as uniforms.
 	float blur = 2.0f * style_get_scalar(s, SS_BOX_SHADOW_BLUR) * data->scale;
+	float blur_v = blur / (float)box->height;
+	float blur_h = blur / (float)box->width;
 	float ob = 0.0f, oe = 1.0f;
-	float it = blur / (float)box->height;
+	float it = blur_v > 0.5f ? 0.5f : blur_v;
 	float ib = oe - it;
-	float il = blur / (float)box->width;
+	float il = blur_h > 0.5f ? 0.5f : blur_h;
 	float ir = oe - il;
 	GLfloat verts[] = {
 		quad_verts(ob, il, it, ob)
@@ -373,18 +375,29 @@ void style_render_shadow(struct style_render_data *data,
 	};
 
 	// Note that pixels should be sampled in the center for proper interpolation
-	float px0 = 0.5f/(float)gauss_lut_width;
-	float px1 = px0 * (float)(2*gauss_lut_width-1);
+	float px0, px0_v, px0_h, px1;
+	px0 = px0_v = px0_h = 0.5f/(float)gauss_lut_width;
+	px1 = px0 * (float)(2*gauss_lut_width-1);
+
+	// If the blur is greater than 0.5, quad #4 will have a size of zero.  To
+	// blur the shadow further, the texture's zero point needs to be moved
+	// towards (1,1).
+	if(blur_h > 0.5f) {
+		px0_h = px1 - (px1-px0)*(0.5f/blur_h);
+	}
+	if(blur_v > 0.5f) {
+		px0_v = px1 - (px1-px0)*(0.5f/blur_v);
+	}
 	GLfloat texcoord[] = {
-		quad_verts(px1, px0, px0, px1)
-		quad_verts(px1, px0, px0, px0)
-		quad_verts(px1, px1, px0, px0)
-		quad_verts(px0, px0, px0, px1)
-		quad_verts(px0, px0, px0, px0)
-		quad_verts(px0, px1, px0, px0)
-		quad_verts(px0, px0, px1, px1)
-		quad_verts(px0, px0, px1, px0)
-		quad_verts(px0, px1, px1, px0)
+		quad_verts(px1,   px0_h, px0_v, px1)
+		quad_verts(px1,   px0_h, px0_v, px0_h)
+		quad_verts(px1,   px1,   px0_v, px0_h)
+		quad_verts(px0_v, px0_h, px0_v, px1)
+		quad_verts(px0_v, px0_h, px0_v, px0_h)
+		quad_verts(px0_v, px1,   px0_v, px0_h)
+		quad_verts(px0_v, px0_h, px1,   px1)
+		quad_verts(px0_v, px0_h, px1,   px0_h)
+		quad_verts(px0_v, px1,   px1,   px0_h)
 	};
 
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, verts);
