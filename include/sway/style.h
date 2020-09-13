@@ -84,6 +84,7 @@ struct style_render_data {
 	struct wlr_texture *texture;
 	struct style_box box;
 	enum wl_output_transform transform;
+	float scale;
 };
 
 typedef void (*style_render_func_t)(struct style_render_data *data,

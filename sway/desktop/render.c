@@ -351,6 +351,7 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 		.damage = damage,
 		.style = &con->style,
 		.transform = WL_OUTPUT_TRANSFORM_NORMAL,
+		.scale = output->wlr_output->scale,
 		.texture = NULL,
 	};
 

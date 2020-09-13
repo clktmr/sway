@@ -334,7 +334,7 @@ void style_render_shadow(struct style_render_data *data,
 	// TODO Possible performance improvement by storing the mesh once in a
 	// global VBO and animate it in the vertex shader by passing it, ib, il and
 	// ir as uniforms.
-	float blur = 2.0f * style_get_scalar(s, SS_BOX_SHADOW_BLUR);
+	float blur = 2.0f * style_get_scalar(s, SS_BOX_SHADOW_BLUR) * data->scale;
 	float ob = 0.0f, oe = 1.0f;
 	float it = blur / (float)box->height;
 	float ib = oe - it;
@@ -426,10 +426,10 @@ void style_render_borders(struct style_render_data *data,
 	// ir as uniforms.
 	const float *bw = style_get_vector4(s, SV4_BORDER_WIDTH);
 	float ob = 0.0f, oe = 1.0f;
-	float ib = oe - bw[SE_BOTTOM] / (float)box->height;
-	float it = bw[SE_TOP] / (float)box->height;
-	float il = bw[SE_LEFT] / (float)box->width;
-	float ir = oe - bw[SE_RIGHT] / (float)box->width;
+	float ib = oe - bw[SE_BOTTOM] / (float)box->height * data->scale;
+	float it = bw[SE_TOP] / (float)box->height * data->scale;
+	float il = bw[SE_LEFT] / (float)box->width * data->scale;
+	float ir = oe - bw[SE_RIGHT] / (float)box->width * data->scale;
 	GLfloat verts[] = {
 		quad_verts(ob, il, it, ob)
 		quad_verts(ob, ir, it, il)
@@ -570,6 +570,7 @@ void style_render_view(struct sway_style *s, struct sway_view *view,
 				.height = view->saved_buffer_height,
 			},
 			.texture = view->saved_buffer->texture,
+			.scale = output->wlr_output->scale,
 		};
 
 		struct wlr_box output_box = {
@@ -594,6 +595,7 @@ void style_render_view(struct sway_style *s, struct sway_view *view,
 	struct style_render_data data = {
 		.damage = damage,
 		.style = s,
+		.scale = output->wlr_output->scale,
 	};
 	// Render all toplevels without descending into popups
 	double ox = view->container->surface_x -
