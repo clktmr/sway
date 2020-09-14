@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200112L
+#define _POSIX_C_SOURCE 200809L
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -36,11 +36,44 @@
 #include "sway/xwayland.h"
 #endif
 
+static struct wlr_renderer *renderer_autocreate(struct wlr_egl *egl,
+		EGLenum platform, void *remote_display, EGLint *config_attribs,
+		EGLint visual_id) {
+	// Append GLES2-specific bits to the provided EGL config attributes
+	EGLint gles2_config_attribs[] = {
+		EGL_SAMPLES, 4,
+		EGL_NONE,
+	};
+
+	size_t config_attribs_len = 0; // not including terminating EGL_NONE
+	while (config_attribs != NULL &&
+			config_attribs[config_attribs_len] != EGL_NONE) {
+		++config_attribs_len;
+	}
+
+	size_t all_config_attribs_len = config_attribs_len +
+		sizeof(gles2_config_attribs) / sizeof(gles2_config_attribs[0]);
+	EGLint *all_config_attribs =
+			malloc(all_config_attribs_len * sizeof(EGLint));
+	if (config_attribs_len > 0) {
+		memcpy(all_config_attribs, config_attribs,
+			config_attribs_len * sizeof(EGLint));
+	}
+	memcpy(&all_config_attribs[config_attribs_len], gles2_config_attribs,
+		sizeof(gles2_config_attribs));
+
+	struct wlr_renderer *renderer = wlr_renderer_autocreate(egl, platform,
+			remote_display, all_config_attribs, visual_id);
+
+	free(all_config_attribs);
+	return renderer;
+}
+
 bool server_privileged_prepare(struct sway_server *server) {
 	sway_log(SWAY_DEBUG, "Preparing Wayland server initialization");
 	server->wl_display = wl_display_create();
 	server->wl_event_loop = wl_display_get_event_loop(server->wl_display);
-	server->backend = wlr_backend_autocreate(server->wl_display, NULL);
+	server->backend = wlr_backend_autocreate(server->wl_display, renderer_autocreate);
 	server->noop_backend = wlr_noop_backend_create(server->wl_display);
 
 	if (!server->backend) {
