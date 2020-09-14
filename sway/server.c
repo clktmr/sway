@@ -32,6 +32,7 @@
 #include "sway/output.h"
 #include "sway/server.h"
 #include "sway/tree/root.h"
+#include "sway/style/shaders.h"
 #if HAVE_XWAYLAND
 #include "sway/xwayland.h"
 #endif

@@ -6,12 +6,7 @@
 #include <wlr/types/wlr_surface.h>
 #include "sway/style.h"
 #include "sway/output.h"
-
-extern GLuint style_shader_prog;
-extern GLuint style_shader_prog_exttex;
-
-extern GLuint gauss_lut_tex;
-extern GLuint gauss_lut_width;
+#include "sway/style/shaders.h"
 
 void style_matrix_project_box(float mat[static 9], const struct style_box *box,
 		enum wl_output_transform transform, float rotation,
@@ -58,17 +53,13 @@ void style_render_shadow(struct style_render_data *data,
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	glUseProgram(style_shader_prog);
+	glUseProgram(shaderprog_decorations.prog);
 
-	GLint fg_color_uniform = glGetUniformLocation(style_shader_prog, "fg_color");
-	GLint bg_color_uniform = glGetUniformLocation(style_shader_prog, "bg_color");
-	GLint proj_uniform = glGetUniformLocation(style_shader_prog, "proj");
-	GLint tex_uniform = glGetUniformLocation(style_shader_prog, "tex");
 	const float* shadow_color = style_get_vector4(s, SV4_BOX_SHADOW_COLOR);
-	glUniform4fv(fg_color_uniform, 1, shadow_color);
-	glUniform4fv(bg_color_uniform, 1, (float[]){0.0f, 0.0f, 0.0f, 0.0f});
-	glUniform1i(tex_uniform, 0);
-	glUniformMatrix3fv(proj_uniform, 1, GL_FALSE, transposition);
+	glUniform4fv(shaderprog_decorations.uniforms.fg_color, 1, shadow_color);
+	glUniform4fv(shaderprog_decorations.uniforms.bg_color, 1, (float[]){0.0f, 0.0f, 0.0f, 0.0f});
+	glUniform1i(shaderprog_decorations.uniforms.tex, 0);
+	glUniformMatrix3fv(shaderprog_decorations.uniforms.proj, 1, GL_FALSE, transposition);
 
 	// Generate the illustrated quadratic mesh to render the shadow.  Quad #4
 	// will simply render with the box shadow color, while all other quads are
@@ -132,16 +123,16 @@ void style_render_shadow(struct style_render_data *data,
 		quad_verts(px0_v, px1,   px1,   px0_h)
 	};
 
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, verts);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, texcoord);
+	glVertexAttribPointer(shaderprog_decorations.attributes.pos, 2, GL_FLOAT, GL_FALSE, 0, verts);
+	glVertexAttribPointer(shaderprog_decorations.attributes.texcoord, 2, GL_FLOAT, GL_FALSE, 0, texcoord);
 
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
+	glEnableVertexAttribArray(shaderprog_decorations.attributes.pos);
+	glEnableVertexAttribArray(shaderprog_decorations.attributes.texcoord);
 
 	glDrawArrays(GL_TRIANGLES, 0, sizeof(verts)/sizeof(*verts)/2);
 
-	glDisableVertexAttribArray(0);
-	glDisableVertexAttribArray(1);
+	glDisableVertexAttribArray(shaderprog_decorations.attributes.pos);
+	glDisableVertexAttribArray(shaderprog_decorations.attributes.texcoord);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
@@ -160,18 +151,14 @@ void style_render_borders(struct style_render_data *data,
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	glUseProgram(style_shader_prog);
+	glUseProgram(shaderprog_decorations.prog);
 
-	GLint fg_color_uniform = glGetUniformLocation(style_shader_prog, "fg_color");
-	GLint bg_color_uniform = glGetUniformLocation(style_shader_prog, "bg_color");
-	GLint proj_uniform = glGetUniformLocation(style_shader_prog, "proj");
-	GLint tex_uniform = glGetUniformLocation(style_shader_prog, "tex");
 	const float* border_color = style_get_vector4(s, SV4_BORDER_COLOR);
 	const float* bg_color = style_get_vector4(s, SV4_BACKGROUND_COLOR);
-	glUniform4fv(fg_color_uniform, 1, border_color);
-	glUniform4fv(bg_color_uniform, 1, bg_color);
-	glUniform1i(tex_uniform, 0);
-	glUniformMatrix3fv(proj_uniform, 1, GL_FALSE, transposition);
+	glUniform4fv(shaderprog_decorations.uniforms.fg_color, 1, border_color);
+	glUniform4fv(shaderprog_decorations.uniforms.bg_color, 1, bg_color);
+	glUniform1i(shaderprog_decorations.uniforms.tex, 0);
+	glUniformMatrix3fv(shaderprog_decorations.uniforms.proj, 1, GL_FALSE, transposition);
 
 	// Generate the illustrated quadratic mesh to render the shadow.  Quad #4
 	// will render with the background color, while all other quads are
@@ -225,13 +212,13 @@ void style_render_borders(struct style_render_data *data,
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, verts);
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, texcoord);
 
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
+	glEnableVertexAttribArray(shaderprog_decorations.attributes.pos);
+	glEnableVertexAttribArray(shaderprog_decorations.attributes.texcoord);
 
 	glDrawArrays(GL_TRIANGLES, 0, sizeof(verts)/sizeof(*verts)/2);
 
-	glDisableVertexAttribArray(0);
-	glDisableVertexAttribArray(1);
+	glDisableVertexAttribArray(shaderprog_decorations.attributes.pos);
+	glDisableVertexAttribArray(shaderprog_decorations.attributes.texcoord);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
@@ -265,26 +252,24 @@ static void style_render_texture(struct style_render_data *data,
 	//			break;
 	//		}
 
-	glUseProgram(style_shader_prog_exttex);
+	glUseProgram(shaderprog_ext_tex.prog);
 
-	GLint proj_uniform = glGetUniformLocation(style_shader_prog_exttex, "proj");
-	GLint tex_uniform = glGetUniformLocation(style_shader_prog_exttex, "tex");
-	glUniform1i(tex_uniform, 0);
-	glUniformMatrix3fv(proj_uniform, 1, GL_FALSE, transposition);
+	glUniform1i(shaderprog_ext_tex.uniforms.tex, 0);
+	glUniformMatrix3fv(shaderprog_ext_tex.uniforms.proj, 1, GL_FALSE, transposition);
 
 	GLfloat verts[]    = { quad_verts(0.0f, 1.0f, 1.0f, 0.0f) };
 	GLfloat texcoord[] = { quad_verts(0.0f, 1.0f, 1.0f, 0.0f) };
 
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, verts);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, texcoord);
+	glVertexAttribPointer(shaderprog_ext_tex.attributes.pos, 2, GL_FLOAT, GL_FALSE, 0, verts);
+	glVertexAttribPointer(shaderprog_ext_tex.attributes.texcoord, 2, GL_FLOAT, GL_FALSE, 0, texcoord);
 
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
+	glEnableVertexAttribArray(shaderprog_ext_tex.attributes.pos);
+	glEnableVertexAttribArray(shaderprog_ext_tex.attributes.texcoord);
 
 	glDrawArrays(GL_TRIANGLES, 0, sizeof(verts)/sizeof(*verts)/2);
 
-	glDisableVertexAttribArray(0);
-	glDisableVertexAttribArray(1);
+	glDisableVertexAttribArray(shaderprog_ext_tex.attributes.pos);
+	glDisableVertexAttribArray(shaderprog_ext_tex.attributes.texcoord);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 }

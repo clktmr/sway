@@ -147,8 +147,6 @@ void style_render_borders(struct style_render_data *data,
 void style_render_view(struct sway_style * s, struct sway_view *view,
 		struct sway_output *output, pixman_region32_t *damage);
 
-void style_shader_init(struct wlr_renderer *renderer);
-
 void style_box_scale(struct style_box *box, float scale);
 
 /**

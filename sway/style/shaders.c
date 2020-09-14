@@ -5,6 +5,10 @@
 #include <wlr/types/wlr_matrix.h>
 #include <wlr/types/wlr_surface.h>
 #include "log.h"
+#include "sway/style/shaders.h"
+
+struct shaderprog_decorations_t shaderprog_decorations;
+struct shaderprog_ext_tex_t shaderprog_ext_tex;
 
 // 16x16 lookup table for gaussian blur
 GLuint gauss_lut_tex;
@@ -27,7 +31,7 @@ GLbyte gauss_lut[] =
 	"\x01\x01\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00"
 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
 
-const GLchar style_shader_vertex_src[] =
+static const GLchar vertex_src[] =
 "uniform mat3 proj;\n"
 "attribute vec2 pos;\n"
 "attribute vec2 texcoord;\n"
@@ -38,7 +42,7 @@ const GLchar style_shader_vertex_src[] =
 "	v_texcoord = texcoord;\n"
 "}\n";
 
-const GLchar style_shader_fragment_src[] =
+static const GLchar fragment_src_decorations[] =
 "precision mediump float;\n"
 "uniform vec4 fg_color;\n"
 "uniform vec4 bg_color;\n"
@@ -50,7 +54,7 @@ const GLchar style_shader_fragment_src[] =
 "	gl_FragColor = fg_color*c + bg_color*(1.0-c);\n"
 "}\n";
 
-const GLchar style_shader_fragment_src_extex[] =
+static const GLchar fragment_src_ext_tex[] =
 "#extension GL_OES_EGL_image_external : require\n\n"
 "precision mediump float;\n"
 "uniform samplerExternalOES tex;\n"
@@ -60,8 +64,6 @@ const GLchar style_shader_fragment_src_extex[] =
 "	gl_FragColor = texture2D(tex, v_texcoord);\n"
 "}\n";
 
-GLuint style_shader_prog;
-GLuint style_shader_prog_exttex;
 
 static GLuint compile_shader(GLuint type, const GLchar *src) {
 	GLuint shader = glCreateShader(type);
@@ -78,6 +80,41 @@ static GLuint compile_shader(GLuint type, const GLchar *src) {
 	return shader;
 }
 
+static GLuint link_program(const GLchar *vert_src, const GLchar *frag_src) {
+	GLuint vert = compile_shader(GL_VERTEX_SHADER, vert_src);
+	if (!vert) {
+		goto error;
+	}
+
+	GLuint frag = compile_shader(GL_FRAGMENT_SHADER, frag_src);
+	if (!frag) {
+		glDeleteShader(vert);
+		goto error;
+	}
+
+	GLuint prog = glCreateProgram();
+	glAttachShader(prog, vert);
+	glAttachShader(prog, frag);
+	glLinkProgram(prog);
+
+	glDetachShader(prog, vert);
+	glDetachShader(prog, frag);
+	glDeleteShader(vert);
+	glDeleteShader(frag);
+
+	GLint ok;
+	glGetProgramiv(prog, GL_LINK_STATUS, &ok);
+	if (ok == GL_FALSE) {
+		glDeleteProgram(prog);
+		goto error;
+	}
+
+	return prog;
+
+error:
+	return 0;
+}
+
 // FIXME free resources in style_shader_deinit()
 void style_shader_init(struct wlr_renderer *renderer) {
 	// load lookup table for gaussian blurred shadows
@@ -88,53 +125,28 @@ void style_shader_init(struct wlr_renderer *renderer) {
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	// build shader programs
-	GLuint vert = compile_shader(GL_VERTEX_SHADER, style_shader_vertex_src);
-	if (!vert) {
+	GLuint prog;
+	shaderprog_decorations.prog = prog =
+		link_program(vertex_src, fragment_src_decorations);
+	if (!prog) {
 		goto error;
 	}
+	shaderprog_decorations.attributes.pos = glGetAttribLocation(prog, "pos");
+	shaderprog_decorations.attributes.texcoord = glGetAttribLocation(prog, "texcoord");
+	shaderprog_decorations.uniforms.proj = glGetUniformLocation(prog, "proj");
+	shaderprog_decorations.uniforms.tex = glGetUniformLocation(prog, "tex");
+	shaderprog_decorations.uniforms.bg_color = glGetUniformLocation(prog, "bg_color");
+	shaderprog_decorations.uniforms.fg_color = glGetUniformLocation(prog, "fg_color");
 
-	GLuint frag = compile_shader(GL_FRAGMENT_SHADER, style_shader_fragment_src);
-	if (!frag) {
-		glDeleteShader(vert);
+	shaderprog_ext_tex.prog = prog =
+		link_program(vertex_src, fragment_src_ext_tex);
+	if (!prog) {
 		goto error;
 	}
-
-	GLuint frag_exttex = compile_shader(GL_FRAGMENT_SHADER, style_shader_fragment_src_extex);
-	if (!frag_exttex) {
-		glDeleteShader(frag);
-		glDeleteShader(vert);
-		goto error;
-	}
-
-	GLint ok;
-	style_shader_prog = glCreateProgram();
-	glAttachShader(style_shader_prog, vert);
-	glAttachShader(style_shader_prog, frag);
-	glLinkProgram(style_shader_prog);
-	glDetachShader(style_shader_prog, vert);
-	glDetachShader(style_shader_prog, frag);
-	glGetProgramiv(style_shader_prog, GL_LINK_STATUS, &ok);
-	if (ok == GL_FALSE) {
-		glDeleteProgram(style_shader_prog);
-		goto error;
-	}
-
-	style_shader_prog_exttex = glCreateProgram();
-	glAttachShader(style_shader_prog_exttex, vert);
-	glAttachShader(style_shader_prog_exttex, frag_exttex);
-	glLinkProgram(style_shader_prog_exttex);
-	glDetachShader(style_shader_prog_exttex, vert);
-	glDetachShader(style_shader_prog_exttex, frag_exttex);
-	glGetProgramiv(style_shader_prog_exttex, GL_LINK_STATUS, &ok);
-	if (ok == GL_FALSE) {
-		glDeleteProgram(style_shader_prog);
-		glDeleteProgram(style_shader_prog_exttex);
-		goto error;
-	}
-
-	glDeleteShader(vert);
-	glDeleteShader(frag);
-	glDeleteShader(frag_exttex);
+	shaderprog_ext_tex.attributes.pos = glGetAttribLocation(prog, "pos");
+	shaderprog_ext_tex.attributes.texcoord = glGetAttribLocation(prog, "texcoord");
+	shaderprog_ext_tex.uniforms.proj = glGetUniformLocation(prog, "proj");
+	shaderprog_ext_tex.uniforms.tex = glGetUniformLocation(prog, "tex");
 
 	return;
 
