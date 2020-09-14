@@ -72,7 +72,7 @@ float style_get_scalar(const struct sway_style *s, enum style_scalar prop) {
 }
 
 void style_set_scalar(struct sway_style *s, enum style_scalar prop, float val) {
-	s->props[STYLE_SS_OFFSET + prop] = val;
+	s->transitions[STYLE_SS_OFFSET + prop].to = val;
 }
 
 const float *style_get_vector4(const struct sway_style *s, enum style_vector4 prop) {
@@ -83,7 +83,9 @@ void style_set_vector4(struct sway_style *s,
 		enum style_vector4 prop,
 		float val[4]) {
 	size_t offset = STYLE_SV4_OFFSET + prop * 4;
-	memcpy(&s->props[offset], val, sizeof(*s->props) * 4);
+	for (size_t i = 0; i < 4; ++i) {
+		s->transitions[offset+i].to = val[i];
+	}
 }
 
 struct style_box style_content_box(const struct sway_style *s) {
@@ -141,8 +143,11 @@ bool style_animate(struct sway_style *s, const struct timespec *when) {
 			float end = (float)trans->end.tv_sec + trans->end.tv_nsec/1.0e9f;
 			float now = (float)when->tv_sec + when->tv_nsec/1.0e9f;
 			float t = (now-begin)/(end-begin);
-			s->props[i] = s->transitions[i].transition_func(trans->from, trans->to, t);
+			s->props[i] = trans->transition_func(trans->from, trans->to, t);
 			ended = false;
+		} else {
+			// Make sure animations always end exactly at their destination
+			s->props[i] = trans->to;
 		}
 	}
 	return ended;
