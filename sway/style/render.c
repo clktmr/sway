@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
 #include <wlr/render/gles2.h>
 #include <wlr/render/wlr_texture.h>
 #include <wlr/types/wlr_matrix.h>
@@ -238,38 +239,43 @@ static void style_render_texture(struct style_render_data *data,
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(attribs.target, attribs.tex);
 	glTexParameteri(attribs.target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+	// FIXME Use filter settings from output, see set_scale_filter.
 	glTexParameteri(attribs.target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	// TODO Check texture attributes (alpha, y_invert) and select shader based
-	// on texture target:
-	//
-	//		switch (attribs.target) {
-	//		case GL_TEXTURE_2D:
-	//			glUseProgram(style_shader_prog_tex);
-	//			break;
-	//		case GL_TEXTURE_EXTERNAL_OES:
-	//			glUseProgram(style_shader_prog_exttex);
-	//			break;
-	//		}
+	// TODO Check texture attribute `y_invert`
+	struct style_shader_prog_tex *shader;
+	switch (attribs.target) {
+	case GL_TEXTURE_2D:
+		if (attribs.has_alpha) {
+			shader = &shaderprog_rgba_tex;
+		} else {
+			shader = &shaderprog_rgb_tex;
+		}
+		break;
+	case GL_TEXTURE_EXTERNAL_OES:
+		shader = &shaderprog_ext_tex;
+		break;
+	}
 
-	glUseProgram(shaderprog_ext_tex.prog);
+	glUseProgram(shader->prog);
 
-	glUniform1i(shaderprog_ext_tex.uniforms.tex, 0);
-	glUniformMatrix3fv(shaderprog_ext_tex.uniforms.proj, 1, GL_FALSE, transposition);
+	glUniform1i(shader->uniforms.tex, 0);
+	glUniformMatrix3fv(shader->uniforms.proj, 1, GL_FALSE, transposition);
 
 	GLfloat verts[]    = { quad_verts(0.0f, 1.0f, 1.0f, 0.0f) };
 	GLfloat texcoord[] = { quad_verts(0.0f, 1.0f, 1.0f, 0.0f) };
 
-	glVertexAttribPointer(shaderprog_ext_tex.attributes.pos, 2, GL_FLOAT, GL_FALSE, 0, verts);
-	glVertexAttribPointer(shaderprog_ext_tex.attributes.texcoord, 2, GL_FLOAT, GL_FALSE, 0, texcoord);
+	glVertexAttribPointer(shader->attributes.pos, 2, GL_FLOAT, GL_FALSE, 0, verts);
+	glVertexAttribPointer(shader->attributes.texcoord, 2, GL_FLOAT, GL_FALSE, 0, texcoord);
 
-	glEnableVertexAttribArray(shaderprog_ext_tex.attributes.pos);
-	glEnableVertexAttribArray(shaderprog_ext_tex.attributes.texcoord);
+	glEnableVertexAttribArray(shader->attributes.pos);
+	glEnableVertexAttribArray(shader->attributes.texcoord);
 
 	glDrawArrays(GL_TRIANGLES, 0, sizeof(verts)/sizeof(*verts)/2);
 
-	glDisableVertexAttribArray(shaderprog_ext_tex.attributes.pos);
-	glDisableVertexAttribArray(shaderprog_ext_tex.attributes.texcoord);
+	glDisableVertexAttribArray(shader->attributes.pos);
+	glDisableVertexAttribArray(shader->attributes.texcoord);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 }

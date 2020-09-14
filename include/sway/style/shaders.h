@@ -3,13 +3,7 @@
 #include <GLES2/gl2.h>
 #include <wlr/render/wlr_renderer.h>
 
-extern GLuint gauss_lut_tex;
-extern GLuint gauss_lut_width;
-
-/**
- * TODO document
- */
-extern struct shaderprog_decorations_t {
+struct style_shader_prog_decorations {
 	GLuint prog;
 	struct {
 		GLint proj;
@@ -21,12 +15,9 @@ extern struct shaderprog_decorations_t {
 		GLint pos;
 		GLint texcoord;
 	} attributes;
-} shaderprog_decorations;
+};
 
-/**
- * TODO document
- */
-extern struct shaderprog_ext_tex_t {
+struct style_shader_prog_tex {
 	GLuint prog;
 	struct {
 		GLint proj;
@@ -36,7 +27,15 @@ extern struct shaderprog_ext_tex_t {
 		GLint pos;
 		GLint texcoord;
 	} attributes;
-} shaderprog_ext_tex;
+};
+
+extern GLuint gauss_lut_tex;
+extern GLuint gauss_lut_width;
+
+extern struct style_shader_prog_decorations shaderprog_decorations;
+extern struct style_shader_prog_tex shaderprog_ext_tex;
+extern struct style_shader_prog_tex shaderprog_rgb_tex;
+extern struct style_shader_prog_tex shaderprog_rgba_tex;
 
 void style_shader_init(struct wlr_renderer *renderer);
 

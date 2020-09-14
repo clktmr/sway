@@ -7,8 +7,10 @@
 #include "log.h"
 #include "sway/style/shaders.h"
 
-struct shaderprog_decorations_t shaderprog_decorations;
-struct shaderprog_ext_tex_t shaderprog_ext_tex;
+struct style_shader_prog_decorations shaderprog_decorations;
+struct style_shader_prog_tex shaderprog_ext_tex;
+struct style_shader_prog_tex shaderprog_rgb_tex;
+struct style_shader_prog_tex shaderprog_rgba_tex;
 
 // 16x16 lookup table for gaussian blur
 GLuint gauss_lut_tex;
@@ -62,6 +64,24 @@ static const GLchar fragment_src_ext_tex[] =
 "\n"
 "void main() {\n"
 "	gl_FragColor = texture2D(tex, v_texcoord);\n"
+"}\n";
+
+static const GLchar fragment_src_rgba_tex[] =
+"precision mediump float;\n"
+"uniform sampler2D tex;\n"
+"varying vec2 v_texcoord;\n"
+"\n"
+"void main() {\n"
+"	gl_FragColor = texture2D(tex, v_texcoord);\n"
+"}\n";
+
+static const GLchar fragment_src_rgb_tex[] =
+"precision mediump float;\n"
+"uniform sampler2D tex;\n"
+"varying vec2 v_texcoord;\n"
+"\n"
+"void main() {\n"
+"	gl_FragColor = vec4(texture2D(tex, v_texcoord).rgb, 1.0);\n"
 "}\n";
 
 
@@ -147,6 +167,26 @@ void style_shader_init(struct wlr_renderer *renderer) {
 	shaderprog_ext_tex.attributes.texcoord = glGetAttribLocation(prog, "texcoord");
 	shaderprog_ext_tex.uniforms.proj = glGetUniformLocation(prog, "proj");
 	shaderprog_ext_tex.uniforms.tex = glGetUniformLocation(prog, "tex");
+
+	shaderprog_rgb_tex.prog = prog =
+		link_program(vertex_src, fragment_src_rgb_tex);
+	if (!prog) {
+		goto error;
+	}
+	shaderprog_rgb_tex.attributes.pos = glGetAttribLocation(prog, "pos");
+	shaderprog_rgb_tex.attributes.texcoord = glGetAttribLocation(prog, "texcoord");
+	shaderprog_rgb_tex.uniforms.proj = glGetUniformLocation(prog, "proj");
+	shaderprog_rgb_tex.uniforms.tex = glGetUniformLocation(prog, "tex");
+
+	shaderprog_rgba_tex.prog = prog =
+		link_program(vertex_src, fragment_src_rgba_tex);
+	if (!prog) {
+		goto error;
+	}
+	shaderprog_rgba_tex.attributes.pos = glGetAttribLocation(prog, "pos");
+	shaderprog_rgba_tex.attributes.texcoord = glGetAttribLocation(prog, "texcoord");
+	shaderprog_rgba_tex.uniforms.proj = glGetUniformLocation(prog, "proj");
+	shaderprog_rgba_tex.uniforms.tex = glGetUniformLocation(prog, "tex");
 
 	return;
 
