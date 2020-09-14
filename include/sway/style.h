@@ -53,9 +53,12 @@ enum style_scalar {
 	SS_COUNT
 };
 
+typedef float (*style_transition_func_t)(float v0, float v1, float t);
+
 struct style_transition {
 	struct timespec begin, end;
 	float from, to;
+	style_transition_func_t transition_func;
 };
 
 // Layout of the sway_style.props array

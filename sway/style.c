@@ -36,10 +36,30 @@ GLuint gauss_lut_tex;
 GLuint style_shader_prog;
 GLuint style_shader_prog_exttex;
 
+static float interpolate_linear(float v0, float v1, float t) {
+	return v0 + t * (v1 - v0);
+}
+
+static float interpolate_ease_out(float v0, float v1, float t) {
+	t = -(t-1.0f)*(t-1.0f)+1.0f;
+	return interpolate_linear(v0, v1, t);
+}
+
+static float interpolate_ease_in(float v0, float v1, float t) {
+	t = t*t;
+	return interpolate_linear(v0, v1, t);
+}
+
+static float interpolate_ease_inout(float v0, float v1, float t) {
+	t = -2.0f * t * t * (t-1.5f);
+	return interpolate_linear(v0, v1, t);
+}
+
 void style_init(struct sway_style *s) {
 	memset(s->transitions, 0, sizeof(s->transitions));
 	for (size_t i = 0; i < STYLE_PROPS_SIZE; ++i) {
 		s->props[i] = -1.0f;
+		s->transitions[i].transition_func = interpolate_linear;
 	}
 }
 
@@ -110,10 +130,6 @@ struct style_box style_box_union(const struct style_box *a,
 	return box;
 }
 
-static float lerp(float v0, float v1, float t) {
-	return v0 + t * (v1 - v0);
-}
-
 bool style_animate(struct sway_style *s, const struct timespec *when) {
 	bool ended = true;
 	for (size_t i = 0; i < STYLE_PROPS_SIZE; ++i) {
@@ -125,7 +141,7 @@ bool style_animate(struct sway_style *s, const struct timespec *when) {
 			float end = (float)trans->end.tv_sec + trans->end.tv_nsec/1.0e9f;
 			float now = (float)when->tv_sec + when->tv_nsec/1.0e9f;
 			float t = (now-begin)/(end-begin);
-			s->props[i] = lerp(trans->from, trans->to, t);
+			s->props[i] = s->transitions[i].transition_func(trans->from, trans->to, t);
 			ended = false;
 		}
 	}
