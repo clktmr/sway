@@ -366,14 +366,29 @@ static void render_style(struct sway_output *output, pixman_region32_t *damage,
 	style_render_damaged(output->wlr_output, style_render_shadow, &data);
 
 	// render borders
+	float translation[] = {
+		style_get_scalar(s, SS_TRANSLATION_X),
+		style_get_scalar(s, SS_TRANSLATION_Y),
+	};
 	data.box = (struct style_box){
-		.x = state->x + style_get_scalar(s, SS_TRANSLATION_X),
-		.y = state->y + style_get_scalar(s, SS_TRANSLATION_Y),
+		.x = state->x + translation[0],
+		.y = state->y + translation[1],
 		.width = state->width,
 		.height = state->height,
 	};
 	style_box_scale(&data.box, output->wlr_output->scale);
 	style_render_damaged(output->wlr_output, style_render_borders, &data);
+
+	// render background
+	const float *bwidth = style_get_vector4(s, SV4_BORDER_WIDTH);
+	data.box = (struct style_box){
+		.x = state->x + bwidth[SE_LEFT] + translation[0],
+		.y = state->y + bwidth[SE_TOP] + translation[1],
+		.width = state->width - bwidth[SE_LEFT] - bwidth[SE_RIGHT],
+		.height = state->height - bwidth[SE_TOP] - bwidth[SE_BOTTOM],
+	};
+	style_box_scale(&data.box, output->wlr_output->scale);
+	style_render_damaged(output->wlr_output, style_render_background, &data);
 }
 
 /**

@@ -40,52 +40,58 @@ void style_matrix_project_box(float mat[static 9], const struct style_box *box,
 // Returns the vertices of two triangles in GL_CCW order composing a rectangle
 #define quad_verts(t, r, b, l) r,t,l,t,l,b,l,b,r,b,r,t,
 
-void style_render_shadow(struct style_render_data *data,
-		const float matrix[static 9]) {
-	struct sway_style *s = data->style;
-	const struct style_box *box = &data->box;
+// Renders the illustrated mesh in the specified color.
+//
+//      ob  il  ir  oe
+//     0 ┏━━━┳━━━┳━━━┓ ob
+//       ┃ ╭─╂───╂─╮─┃───── outline
+//       ┣━┿━╋━━━╋━┿━┫ it
+//       ┃ │ ┃   ┃ │ ┃
+//       ┣━┿━╋━━━╋━┿━┫ ib ┐
+//       ┃ ╰─╂───╂─╯ ┃    ├ corner_radius
+//     1 ┗━━━┻━━━┻━━━┛ oe ┘
+//       0           1
+//
+// If a corner radius of zero is specified, the center quad will take up all the
+// space.  If a corner radius greater zero is specified, the drawn rect shrinks
+// in size (illustrated by the thin line).  This can be controlled by the
+// outline parameter.  An outline of 1.0 will cause no shrinking at all and an
+// outline of 0.0 will shrink the drawn rect by corner_radius.  The outline can
+// also be blurred within the [0, 1] range.
+//
+// TODO Either set corner_shift automatically from blur or make use of it in
+// style_render_shadow.
+static void style_render_decoration(const float color[static 4],
+		const float corner_radius[static 4], const float corner_shift[static 2],
+		const float outline, const float blur, const float matrix[static 9]) {
 	// OpenGL ES 2 requires the glUniformMatrix3fv transpose parameter to be set
 	// to GL_FALSE
 	float transposition[9];
 	wlr_matrix_transpose(transposition, matrix);
 
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, gauss_lut_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	struct style_shader_prog_decorations *shader = &shaderprog_decorations;
+	glUseProgram(shader->prog);
 
-	glUseProgram(shaderprog_decorations.prog);
+	glUniform4fv(shader->uniforms.color, 1, color);
+	glUniform1f(shader->uniforms.blur, blur);
+	glUniform1f(shader->uniforms.outline, outline);
+	glUniformMatrix3fv(shader->uniforms.proj, 1, GL_FALSE, transposition);
 
-	const float* shadow_color = style_get_vector4(s, SV4_BOX_SHADOW_COLOR);
-	glUniform4fv(shaderprog_decorations.uniforms.fg_color, 1, shadow_color);
-	glUniform4fv(shaderprog_decorations.uniforms.bg_color, 1, (float[]){0.0f, 0.0f, 0.0f, 0.0f});
-	glUniform1i(shaderprog_decorations.uniforms.tex, 0);
-	glUniformMatrix3fv(shaderprog_decorations.uniforms.proj, 1, GL_FALSE, transposition);
-
-	// Generate the illustrated quadratic mesh to render the shadow.  Quad #4
-	// will simply render with the box shadow color, while all other quads are
-	// used for shadow blur by sampling from a lookup table.
-	//
-	//   ob ┌───┬───┬───┐
-	//      │ 0 │ 1 │ 2 │
-	//   it ├───┼───┼───┤
-	//      │ 3 │ 4 │ 5 │
-	//   ib ├───┼───┼───┤
-	//      │ 6 │ 7 │ 8 │
-	//   oe └───┴───┴───┘
-	//      ob  il  ir  oe
-	//
 	// TODO Possible performance improvement by storing the mesh once in a
 	// global VBO and animate it in the vertex shader by passing it, ib, il and
-	// ir as uniforms.
-	float blur = 2.0f * style_get_scalar(s, SS_BOX_SHADOW_BLUR) * data->scale;
-	float blur_v = blur / (float)box->height;
-	float blur_h = blur / (float)box->width;
+	// ir as uniforms.  Also consider storing vertices and indices separately.
 	float ob = 0.0f, oe = 1.0f;
-	float it = blur_v > 0.5f ? 0.5f : blur_v;
-	float ib = oe - it;
-	float il = blur_h > 0.5f ? 0.5f : blur_h;
-	float ir = oe - il;
+	float it = ob + corner_radius[SE_TOP];
+	float ib = oe - corner_radius[SE_BOTTOM];
+	float il = ob + corner_radius[SE_LEFT];
+	float ir = oe - corner_radius[SE_RIGHT];
+	if (il > ir) {
+		il = ir = (il + ir) / 2.0f;
+	}
+	if (it > ib) {
+		it = ib = (it + ib) / 2.0f;
+	}
+
 	GLfloat verts[] = {
 		quad_verts(ob, il, it, ob)
 		quad_verts(ob, ir, it, il)
@@ -98,20 +104,9 @@ void style_render_shadow(struct style_render_data *data,
 		quad_verts(ib, oe, oe, ir)
 	};
 
-	// Note that pixels should be sampled in the center for proper interpolation
-	float px0, px0_v, px0_h, px1;
-	px0 = px0_v = px0_h = 0.5f/(float)gauss_lut_width;
-	px1 = px0 * (float)(2*gauss_lut_width-1);
-
-	// If the blur is greater than 0.5, quad #4 will have a size of zero.  To
-	// blur the shadow further, the texture's zero point needs to be moved
-	// towards (1,1).
-	if(blur_h > 0.5f) {
-		px0_h = px1 - (px1-px0)*(0.5f/blur_h);
-	}
-	if(blur_v > 0.5f) {
-		px0_v = px1 - (px1-px0)*(0.5f/blur_v);
-	}
+	float px0_v = corner_shift[0];
+	float px0_h = corner_shift[1];
+	float px1 = 1.0f;
 	GLfloat texcoord[] = {
 		quad_verts(px1,   px0_h, px0_v, px1)
 		quad_verts(px1,   px0_h, px0_v, px0_h)
@@ -124,104 +119,86 @@ void style_render_shadow(struct style_render_data *data,
 		quad_verts(px0_v, px1,   px1,   px0_h)
 	};
 
-	glVertexAttribPointer(shaderprog_decorations.attributes.pos, 2, GL_FLOAT, GL_FALSE, 0, verts);
-	glVertexAttribPointer(shaderprog_decorations.attributes.texcoord, 2, GL_FLOAT, GL_FALSE, 0, texcoord);
+	glVertexAttribPointer(shader->attributes.pos, 2, GL_FLOAT, GL_FALSE, 0, verts);
+	glVertexAttribPointer(shader->attributes.texcoord, 2, GL_FLOAT, GL_FALSE, 0, texcoord);
 
-	glEnableVertexAttribArray(shaderprog_decorations.attributes.pos);
-	glEnableVertexAttribArray(shaderprog_decorations.attributes.texcoord);
+	glEnableVertexAttribArray(shader->attributes.pos);
+	glEnableVertexAttribArray(shader->attributes.texcoord);
 
 	glDrawArrays(GL_TRIANGLES, 0, sizeof(verts)/sizeof(*verts)/2);
 
-	glDisableVertexAttribArray(shaderprog_decorations.attributes.pos);
-	glDisableVertexAttribArray(shaderprog_decorations.attributes.texcoord);
+	glDisableVertexAttribArray(shader->attributes.pos);
+	glDisableVertexAttribArray(shader->attributes.texcoord);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void style_render_shadow(struct style_render_data *data,
+		const float matrix[static 9]) {
+	struct sway_style *s = data->style;
+	const struct style_box *box = &data->box;
+	const float* shadow_color = style_get_vector4(s, SV4_BOX_SHADOW_COLOR);
+	const float* radius_px = style_get_vector4(s, SV4_BORDER_RADIUS);
+	float blur_px = style_get_scalar(s, SS_BOX_SHADOW_BLUR);
+	// TODO This only renders correctly if all borders have the same radius.  To
+	// fix this we need a possibility to pass the blur in pixel to the shader
+	// instead of a relation to corner radiuses.
+	float blur = 0.5f * blur_px / (blur_px + radius_px[0]);
+	float outline = 1.0f - blur;
+	float radius[4] = {
+		2.0f * data->scale * (blur_px + radius_px[SE_TOP]) / box->height,
+		2.0f * data->scale * (blur_px + radius_px[SE_RIGHT]) / box->width,
+		2.0f * data->scale * (blur_px + radius_px[SE_BOTTOM]) / box->height,
+		2.0f * data->scale * (blur_px + radius_px[SE_LEFT]) / box->width,
+	};
+	style_render_decoration(shadow_color, radius, (float[]){0.0f, 0.0f}, outline, blur, matrix);
 }
 
 void style_render_borders(struct style_render_data *data,
 		const float matrix[static 9]) {
 	struct sway_style *s = data->style;
 	const struct style_box *box = &data->box;
-	// OpenGL ES 2 requires the glUniformMatrix3fv transpose parameter to be set
-	// to GL_FALSE
-	float transposition[9];
-	wlr_matrix_transpose(transposition, matrix);
+	const float scale = data->scale;
+	const float* color = style_get_vector4(s, SV4_BORDER_COLOR);
+	const float* radius_px = style_get_vector4(s, SV4_BORDER_RADIUS);
+	float radius[4] = {
+		2.0f * scale * radius_px[SE_TOP] / box->height,
+		2.0f * scale * radius_px[SE_RIGHT] / box->width,
+		2.0f * scale * radius_px[SE_BOTTOM] / box->height,
+		2.0f * scale * radius_px[SE_LEFT] / box->width,
+	};
+	// We actually don't want any blur, but setting it to zero will give us
+	// alias even though multisampling is enabled.  With a blur of one pixel the
+	// borders will still render pixel perfect when aligned to pixels, but also
+	// transition nicely between pixels.  The same blur is also used in
+	// style_render_borders.
+	//
+	// TODO This is only an appoximation of 1px and will look bad if radiuses of
+	// the corners are different.  To fix this we need a possibility to pass the
+	// blur in pixel to the shader instead of a relation to corner radiuses.
+	
+	const float blur = 0.25f/radius_px[0];
 
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, gauss_lut_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	style_render_decoration(color, radius, (float[]){0.0f, 0.0f}, 1.0f, blur, matrix);
+};
 
-	glUseProgram(shaderprog_decorations.prog);
-
-	const float* border_color = style_get_vector4(s, SV4_BORDER_COLOR);
+void style_render_background(struct style_render_data *data,
+		const float matrix[static 9]) {
+	struct sway_style *s = data->style;
+	const struct style_box *box = &data->box;
+	const float scale = data->scale;
+	const float* width = style_get_vector4(s, SV4_BORDER_WIDTH);
 	const float* bg_color = style_get_vector4(s, SV4_BACKGROUND_COLOR);
-	glUniform4fv(shaderprog_decorations.uniforms.fg_color, 1, border_color);
-	glUniform4fv(shaderprog_decorations.uniforms.bg_color, 1, bg_color);
-	glUniform1i(shaderprog_decorations.uniforms.tex, 0);
-	glUniformMatrix3fv(shaderprog_decorations.uniforms.proj, 1, GL_FALSE, transposition);
-
-	// Generate the illustrated quadratic mesh to render the shadow.  Quad #4
-	// will render with the background color, while all other quads are
-	// rendered with the border color.
-	//
-	//   ob ┌───┬───┬───┐
-	//      │ 0 │ 1 │ 2 │
-	//   it ├───┼───┼───┤
-	//      │ 3 │ 4 │ 5 │
-	//   ib ├───┼───┼───┤
-	//      │ 6 │ 7 │ 8 │
-	//   oe └───┴───┴───┘
-	//      ob  il  ir  oe
-	//
-	// TODO Possible performance improvement by storing the mesh once in a
-	// global VBO and animate it in the vertex shader by passing it, ib, il and
-	// ir as uniforms.
-	const float *bw = style_get_vector4(s, SV4_BORDER_WIDTH);
-	float ob = 0.0f, oe = 1.0f;
-	float ib = oe - bw[SE_BOTTOM] / (float)box->height * data->scale;
-	float it = bw[SE_TOP] / (float)box->height * data->scale;
-	float il = bw[SE_LEFT] / (float)box->width * data->scale;
-	float ir = oe - bw[SE_RIGHT] / (float)box->width * data->scale;
-	GLfloat verts[] = {
-		quad_verts(ob, il, it, ob)
-		quad_verts(ob, ir, it, il)
-		quad_verts(ob, oe, it, ir)
-		quad_verts(it, il, ib, ob)
-		quad_verts(it, ir, ib, il)
-		quad_verts(it, oe, ib, ir)
-		quad_verts(ib, il, oe, ob)
-		quad_verts(ib, ir, oe, il)
-		quad_verts(ib, oe, oe, ir)
+	const float* radius_px = style_get_vector4(s, SV4_BORDER_RADIUS);
+	float radius[4] = {
+		2.0f * scale * (radius_px[SE_TOP] - 0.5f*width[SE_TOP]) / box->height,
+		2.0f * scale * (radius_px[SE_RIGHT] - 0.5f*width[SE_RIGHT]) / box->width,
+		2.0f * scale * (radius_px[SE_BOTTOM] - 0.5f*width[SE_BOTTOM]) / box->height,
+		2.0f * scale * (radius_px[SE_LEFT] - 0.5f*width[SE_LEFT]) / box->width,
 	};
+	const float blur = 0.25f/radius_px[0];
 
-	// Note that pixels should be sampled in the center for proper interpolation
-	float px0 = 0.5f/(float)gauss_lut_width;
-	float px1 = px0 * (float)(2*gauss_lut_width-1);
-	GLfloat texcoord[] = {
-		quad_verts(px0, px0, px0, px0)
-		quad_verts(px0, px0, px0, px0)
-		quad_verts(px0, px0, px0, px0)
-		quad_verts(px0, px0, px0, px0)
-		quad_verts(px1, px1, px1, px1)
-		quad_verts(px0, px0, px0, px0)
-		quad_verts(px0, px0, px0, px0)
-		quad_verts(px0, px0, px0, px0)
-		quad_verts(px0, px0, px0, px0)
-	};
-
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, verts);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, texcoord);
-
-	glEnableVertexAttribArray(shaderprog_decorations.attributes.pos);
-	glEnableVertexAttribArray(shaderprog_decorations.attributes.texcoord);
-
-	glDrawArrays(GL_TRIANGLES, 0, sizeof(verts)/sizeof(*verts)/2);
-
-	glDisableVertexAttribArray(shaderprog_decorations.attributes.pos);
-	glDisableVertexAttribArray(shaderprog_decorations.attributes.texcoord);
-
-	glBindTexture(GL_TEXTURE_2D, 0);
+	style_render_decoration(bg_color, radius, (float[]){0.0f, 0.0f}, 1.0f, blur, matrix);
 }
 
 static void style_render_texture(struct style_render_data *data,

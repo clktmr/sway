@@ -7,9 +7,9 @@ struct style_shader_prog_decorations {
 	GLuint prog;
 	struct {
 		GLint proj;
-		GLint bg_color;
-		GLint fg_color;
-		GLint tex;
+		GLint color;
+		GLint outline;
+		GLint blur;
 	} uniforms;
 	struct {
 		GLint pos;
@@ -28,9 +28,6 @@ struct style_shader_prog_tex {
 		GLint texcoord;
 	} attributes;
 };
-
-extern GLuint gauss_lut_tex;
-extern GLuint gauss_lut_width;
 
 extern struct style_shader_prog_decorations shaderprog_decorations;
 extern struct style_shader_prog_tex shaderprog_ext_tex;

@@ -144,6 +144,12 @@ void style_render_borders(struct style_render_data *data,
 /**
  * TODO document
  */
+void style_render_background(struct style_render_data *data,
+		const float matrix[static 9]);
+
+/**
+ * TODO document
+ */
 void style_render_view(struct sway_style * s, struct sway_view *view,
 		struct sway_output *output, pixman_region32_t *damage);
 
