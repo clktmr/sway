@@ -96,6 +96,8 @@ typedef void (*style_render_func_t)(struct style_render_data *data,
 
 void style_init(struct sway_style *style);
 
+void style_test(struct sway_style *style); // TODO remove
+
 void style_inherit(struct sway_style *style, const struct sway_style *from);
 
 float style_get_scalar(const struct sway_style *style, enum style_scalar prop);
@@ -166,5 +168,7 @@ struct wlr_box style_box_bounds(const struct style_box *box);
 void style_matrix_project_box(float mat[static 9], const struct style_box *box,
 		enum wl_output_transform transform, float rotation,
 		const float projection[static 9]);
+
+size_t style_titlebar_height(const struct sway_style *s);
 
 #endif

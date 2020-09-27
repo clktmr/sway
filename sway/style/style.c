@@ -15,15 +15,15 @@ static float interpolate_ease_out(float v0, float v1, float t) {
 	return interpolate_linear(v0, v1, t);
 }
 
-static float interpolate_ease_in(float v0, float v1, float t) {
-	t = t*t;
-	return interpolate_linear(v0, v1, t);
-}
+/* static float interpolate_ease_in(float v0, float v1, float t) { */
+/* 	t = t*t; */
+/* 	return interpolate_linear(v0, v1, t); */
+/* } */
 
-static float interpolate_ease_inout(float v0, float v1, float t) {
-	t = -2.0f * t * t * (t-1.5f);
-	return interpolate_linear(v0, v1, t);
-}
+/* static float interpolate_ease_inout(float v0, float v1, float t) { */
+/* 	t = -2.0f * t * t * (t-1.5f); */
+/* 	return interpolate_linear(v0, v1, t); */
+/* } */
 
 void style_init(struct sway_style *s) {
 	memset(s->transitions, 0, sizeof(s->transitions));
@@ -31,6 +31,63 @@ void style_init(struct sway_style *s) {
 		s->props[i] = -1.0f;
 		s->transitions[i].transition_func = interpolate_linear;
 	}
+}
+
+// TODO remove
+void style_test(struct sway_style *s) {
+	for (size_t i = 0; i < STYLE_PROPS_SIZE; ++i) {
+		s->transitions[i].to = 0.0f;
+	}
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+
+	style_set_vector4(s, SV4_PADDING, (float[]){10.0f, 10.0f, 10.0f, 10.0f});
+	style_set_vector4(s, SV4_BACKGROUND_COLOR, (float[]){1.0f, 1.0f, 1.0f, 1.0f});
+	style_set_scalar(s, SS_OPACITY, 0.5f);
+
+	style_set_scalar(s, SS_BOX_SHADOW_SPREAD, -10.0f);
+	style_set_scalar(s, SS_BOX_SHADOW_V_OFFSET, 10.0f);
+	style_set_scalar(s, SS_BOX_SHADOW_H_OFFSET, 0.0f);
+	style_set_vector4(s, SV4_BOX_SHADOW_COLOR, (float[]){0.0f, 0.0f, 0.0f, 0.5f});
+	style_set_scalar(s, SS_BOX_SHADOW_BLUR, 20.0f);
+	struct style_transition *t = &s->transitions[STYLE_SS_OFFSET + SS_BOX_SHADOW_BLUR];
+	t->begin = t->end = now;
+	t->end.tv_sec += 1;
+	t->from = 0.0f;
+	t->transition_func = interpolate_ease_out;
+
+	style_set_scalar(s, SS_TRANSLATION_X, 0.0f);
+	style_set_scalar(s, SS_TRANSLATION_Y, 0.0f);
+	t = &s->transitions[STYLE_SS_OFFSET + SS_TRANSLATION_Y];
+	t->begin = t->end = now;
+	t->end.tv_sec += 1;
+	t->from = 100.0f;
+	t->transition_func = interpolate_ease_out;
+
+	style_set_vector4(s, SV4_BORDER_RADIUS, (float[]){3.0f, 3.0f, 3.0f, 3.0f});
+	style_set_vector4(s, SV4_BORDER_WIDTH,  (float[]){1.0f, 1.0f, 1.0f, 1.0f});
+	style_set_vector4(s, SV4_BORDER_COLOR, (float[]){0.0f, 0.0f, 0.0f, 1.0f});
+	t = &s->transitions[STYLE_SV4_OFFSET + SV4_BORDER_COLOR*4];
+	t[0].begin = t[0].end = now;
+	t[0].end.tv_sec += 1;
+	t[0].from = 1.0f;
+	t[0].transition_func = interpolate_ease_out;
+	t[1].begin = t[1].end = now;
+	t[1].end.tv_sec += 3;
+	t[1].from = 0.0f;
+	t[2].begin = t[2].end = now;
+	t[2].end.tv_sec += 3;
+	t[2].from = 0.0f;
+	t[3].begin = t[3].end = now;
+
+	t = &s->transitions[STYLE_SV4_OFFSET + SV4_BORDER_RADIUS*4];
+	for (size_t i = 0; i < 4; ++i) {
+		t[i].begin = t[i].end = now;
+		t[i].end.tv_sec += 3;
+		t[i].from = 100.0f;
+		t[i].transition_func = interpolate_ease_out;
+	}
+	style_animate(s, &now);
 }
 
 void style_inherit(struct sway_style *s, const struct sway_style *from) {
@@ -139,6 +196,7 @@ void style_animate_containers(struct sway_output *output, list_t *containers,
 			output_damage_whole_container(output, child);
 			child->style = new_style;
 			output_damage_whole_container(output, child);
+			output_damage_whole(output);
 		}
 		if(!child->view) {
 			style_animate_containers(output, child->current.children, when);
@@ -160,4 +218,12 @@ struct wlr_box style_box_bounds(const struct style_box *box) {
 		.width = ceill(box->width)+1,
 		.height = ceill(box->height)+1
 	};
+}
+
+size_t style_titlebar_height(const struct sway_style *s) {
+	const float *padding = style_get_vector4(s, SV4_PADDING);
+	const float *borders = style_get_vector4(s, SV4_BORDER_WIDTH);
+	return config->font_height +
+			padding[SE_TOP] + padding[SE_BOTTOM] +
+			borders[SE_TOP] + borders[SE_BOTTOM];
 }

@@ -43,6 +43,7 @@ struct sway_container *container_create(struct sway_view *view) {
 	c->outputs = create_list();
 
 	style_init(&c->style);
+	style_test(&c->style); // TODO remove
 
 	wl_signal_init(&c->events.destroy);
 	wl_signal_emit(&root->events.new_node, &c->node);

@@ -154,7 +154,7 @@ struct sway_container {
 		struct wl_signal destroy;
 	} events;
 
-	struct sway_style style;
+	struct sway_style style, title_style;
 };
 
 struct sway_container *container_create(struct sway_view *view);
